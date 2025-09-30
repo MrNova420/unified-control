@@ -3537,8 +3537,13 @@ UI_HTML = r"""<!DOCTYPE html>
             }
         }
         
-        // Device management
+        // Device management with loading states
         async function refreshDevices() {
+            // Show loading indicator
+            const deviceList = document.getElementById('deviceList');
+            const previousContent = deviceList.innerHTML;
+            deviceList.innerHTML = '<div style="padding: 1rem; text-align: center; color: #00ff9f;">⏳ Loading devices...</div>';
+            
             try {
                 // Save currently selected devices
                 const selectedDevices = Array.from(document.querySelectorAll('.device-item.selected'))
@@ -3548,7 +3553,6 @@ UI_HTML = r"""<!DOCTYPE html>
                 const data = await api('/api/devices');
                 const devices = data.devices || [];
                 
-                const deviceList = document.getElementById('deviceList');
                 const targetSelect = document.getElementById('targetSelect');
                 
                 deviceList.innerHTML = '';
@@ -3606,8 +3610,12 @@ UI_HTML = r"""<!DOCTYPE html>
                 appendToActivityLog(`📊 Device sync complete: ${devices.length} total, ${onlineCount} online`);
                 
             } catch (error) {
+                // Restore previous content on error
+                deviceList.innerHTML = previousContent || '<div style="padding: 1rem; text-align: center; color: #ff0080;">❌ Failed to load devices</div>';
+                
                 appendToTerminal(`❌ Failed to refresh devices: ${error.message}`, 'error');
                 appendToActivityLog(`❌ Device refresh failed: ${error.message}`, 'error');
+                showNotification(`Failed to refresh devices: ${error.message}`, 'error');
             }
         }
         
@@ -4268,11 +4276,62 @@ Or manually execute the deployment script.
         }
         window.sendQuickCommand = sendQuickCommand;
         
+        // Enhanced command history management
+        let commandHistory = [];
+        let historyIndex = -1;
+        const MAX_HISTORY = 50;
+        
         function handleCommandKeyPress(event) {
+            const input = document.getElementById('commandInput');
+            
             if (event.key === 'Enter') {
+                const command = input.value.trim();
+                if (command) {
+                    // Add to history (avoid duplicates)
+                    if (commandHistory[0] !== command) {
+                        commandHistory.unshift(command);
+                        if (commandHistory.length > MAX_HISTORY) {
+                            commandHistory.pop();
+                        }
+                        // Save to localStorage
+                        try {
+                            localStorage.setItem('commandHistory', JSON.stringify(commandHistory));
+                        } catch (e) {}
+                    }
+                    historyIndex = -1;
+                }
                 sendTerminalCommand();
+            } else if (event.key === 'ArrowUp') {
+                event.preventDefault();
+                if (commandHistory.length > 0 && historyIndex < commandHistory.length - 1) {
+                    historyIndex++;
+                    input.value = commandHistory[historyIndex];
+                }
+            } else if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                if (historyIndex > 0) {
+                    historyIndex--;
+                    input.value = commandHistory[historyIndex];
+                } else if (historyIndex === 0) {
+                    historyIndex = -1;
+                    input.value = '';
+                }
+            } else if (event.key === 'Escape') {
+                input.value = '';
+                historyIndex = -1;
             }
         }
+        
+        // Load command history from localStorage
+        try {
+            const savedHistory = localStorage.getItem('commandHistory');
+            if (savedHistory) {
+                commandHistory = JSON.parse(savedHistory);
+            }
+        } catch (e) {
+            console.warn('Failed to load command history:', e);
+        }
+        
         window.handleCommandKeyPress = handleCommandKeyPress;
         
         function clearTerminal() {
@@ -4625,6 +4684,61 @@ Or manually execute the deployment script.
         // Update sendCommand to use enhanced terminal
         function sendCommand() {
             sendTerminalCommand();
+        }
+        
+        // Keyboard shortcuts for power users
+        document.addEventListener('keydown', function(e) {
+            // Ctrl/Cmd + K: Clear terminal
+            if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                e.preventDefault();
+                clearTerminal();
+                showNotification('Terminal cleared', 'info');
+            }
+            
+            // Ctrl/Cmd + L: Focus command input
+            if ((e.ctrlKey || e.metaKey) && e.key === 'l') {
+                e.preventDefault();
+                const input = document.getElementById('commandInput');
+                if (input) input.focus();
+            }
+            
+            // Ctrl/Cmd + R: Refresh devices
+            if ((e.ctrlKey || e.metaKey) && e.key === 'r') {
+                e.preventDefault();
+                refreshDevices();
+                showNotification('Refreshing devices...', 'info');
+            }
+            
+            // Ctrl/Cmd + /: Show keyboard shortcuts help
+            if ((e.ctrlKey || e.metaKey) && e.key === '/') {
+                e.preventDefault();
+                showKeyboardShortcuts();
+            }
+        });
+        
+        // Show keyboard shortcuts help
+        function showKeyboardShortcuts() {
+            const shortcuts = `
+🎮 Keyboard Shortcuts:
+
+Ctrl/⌘ + K  - Clear terminal
+Ctrl/⌘ + L  - Focus command input
+Ctrl/⌘ + R  - Refresh devices
+Ctrl/⌘ + /  - Show this help
+↑ / ↓       - Navigate command history
+Esc         - Clear current input
+Enter       - Execute command
+            `.trim();
+            
+            appendToTerminal(shortcuts, 'info');
+        }
+        
+        // Focus command input on page load (if not mobile)
+        if (window.innerWidth > 768) {
+            setTimeout(() => {
+                const input = document.getElementById('commandInput');
+                if (input) input.focus();
+            }, 500);
         }
         
         // Auto-refresh and initialization - Optimized intervals to reduce CPU load
