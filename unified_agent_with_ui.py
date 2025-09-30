@@ -4566,9 +4566,46 @@ Or manually execute the deployment script.
             appendToActivityLog('🔄 Initial device sync complete');
         }, 2000);
         
+        // Add localStorage support for persistence
+        // Save UI state periodically
+        setInterval(() => {
+            try {
+                const state = {
+                    lastSync: Date.now(),
+                    deviceCount: document.querySelectorAll('.device-item').length,
+                    onlineCount: document.querySelectorAll('.device-status.online').length,
+                    commandCount: commandCount,
+                    successfulCommands: successfulCommands
+                };
+                localStorage.setItem('unifiedControlState', JSON.stringify(state));
+            } catch (e) {
+                console.warn('localStorage save failed:', e);
+            }
+        }, 5000);
+        
+        // Restore state on load if available
+        try {
+            const savedState = localStorage.getItem('unifiedControlState');
+            if (savedState) {
+                const state = JSON.parse(savedState);
+                const timeSinceSync = Date.now() - state.lastSync;
+                if (timeSinceSync < 60000) { // Less than 1 minute ago
+                    appendToActivityLog(`📦 Restored previous session state (${Math.floor(timeSinceSync/1000)}s ago)`);
+                    commandCount = state.commandCount || 0;
+                    successfulCommands = state.successfulCommands || 0;
+                }
+            }
+        } catch (e) {
+            console.warn('localStorage restore failed:', e);
+        }
+        
         appendToActivityLog('🚀 Advanced Bot Network Control Center initialized');
         appendToActivityLog('📡 50,000+ device support enabled');
         appendToActivityLog('🤖 Real terminal mode with device discovery active');
+        
+        // Initialize bot results panel
+        appendToBotResults('🚀 Bot operations panel initialized');
+        appendToBotResults('📊 Ready to execute network operations');
         
         // Global variable for current bot control
         let currentControlledBot = null;
