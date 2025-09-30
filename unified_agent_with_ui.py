@@ -504,14 +504,40 @@ logging.basicConfig(
 )
 
 class Database:
-    """SQLite database handler for device and upload management"""
+    """Enhanced SQLite database handler with caching and performance optimizations"""
     
     def __init__(self, db_path: str):
         self.db_path = db_path
+        self._cache = {}
+        self._cache_timeout = 30  # Cache for 30 seconds
+        self._cache_timestamps = {}
         self.init_db()
     
+    def _get_cached(self, key: str):
+        """Get value from cache if not expired"""
+        if key in self._cache:
+            if time.time() - self._cache_timestamps.get(key, 0) < self._cache_timeout:
+                return self._cache[key]
+        return None
+    
+    def _set_cache(self, key: str, value):
+        """Set cache value with timestamp"""
+        self._cache[key] = value
+        self._cache_timestamps[key] = time.time()
+    
+    def _clear_cache(self, pattern: str = None):
+        """Clear cache entries matching pattern"""
+        if pattern:
+            keys_to_delete = [k for k in self._cache.keys() if pattern in k]
+            for key in keys_to_delete:
+                del self._cache[key]
+                del self._cache_timestamps[key]
+        else:
+            self._cache.clear()
+            self._cache_timestamps.clear()
+    
     def init_db(self):
-        """Initialize database tables"""
+        """Initialize database tables with optimized indexes"""
         conn = sqlite3.connect(self.db_path)
         try:
             conn.execute("""
@@ -525,6 +551,10 @@ class Database:
                 )
             """)
             
+            # Add indexes for performance
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_devices_last_seen ON devices(last_seen DESC)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_devices_tags ON devices(tags)")
+            
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS uploads (
                     id TEXT PRIMARY KEY,
@@ -536,6 +566,8 @@ class Database:
                     sha256 TEXT
                 )
             """)
+            
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_uploads_created ON uploads(created_at DESC)")
             
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS audit_log (
@@ -1837,8 +1869,8 @@ async def initialize_control_bot():
         hostname = socket.gethostname()
         local_ip = socket.gethostbyname(hostname)
         
-        # Create control bot ID
-        control_bot_id = f"control-{hostname}-{int(time.time())}"
+        # Create STABLE control bot ID (no timestamp so it's consistent across restarts)
+        control_bot_id = f"control-{hostname}"
         
         # Add to clients as master bot
         async with clients_lock:
@@ -1861,6 +1893,13 @@ async def initialize_control_bot():
                 "command_count": 0,
                 "local_device": True  # Mark as local device
             }
+        
+        # Also add to database for persistence
+        db.add_device(
+            control_bot_id,
+            ["control", "master", "admin", "local"],
+            True  # exec_allowed
+        )
         
         # Store in persistent storage
         if persistent_storage:
@@ -2171,7 +2210,12 @@ UI_HTML = r"""<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta name="theme-color" content="#0a0a0a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Unified Control">
+    <meta name="description" content="Unified Device Control System - Professional Bot Network Management">
     <title>🚀 Unified Control Center - Advanced Device Management</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -2531,11 +2575,12 @@ UI_HTML = r"""<!DOCTYPE html>
             text-transform: uppercase;
         }
         
-        /* Mobile responsive */
+        /* Enhanced Mobile Responsiveness */
         @media (max-width: 768px) {
             .main-container {
                 grid-template-columns: 1fr;
                 grid-template-rows: auto auto 1fr;
+                padding: 0.5rem;
             }
             
             .header-content {
@@ -2546,6 +2591,78 @@ UI_HTML = r"""<!DOCTYPE html>
             .system-stats {
                 flex-wrap: wrap;
             }
+            
+            /* Mobile-optimized panels */
+            .panel {
+                padding: 0.75rem;
+                margin: 0.5rem 0;
+            }
+            
+            /* Touch-friendly buttons */
+            .btn, .operation-btn, .tab {
+                min-height: 44px; /* iOS recommended minimum */
+                padding: 0.75rem 1rem;
+                font-size: 14px;
+            }
+            
+            /* Larger input fields for mobile */
+            .command-input, input, select, textarea {
+                min-height: 44px;
+                font-size: 16px; /* Prevents iOS zoom */
+                padding: 0.75rem;
+            }
+            
+            /* Mobile-friendly terminal */
+            .terminal {
+                font-size: 12px;
+                max-height: 250px;
+            }
+            
+            /* Responsive device list */
+            .device-item {
+                padding: 0.75rem;
+                margin: 0.5rem 0;
+            }
+            
+            /* Stack metrics vertically on mobile */
+            .metrics-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            /* Mobile-friendly tabs */
+            .command-tabs {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+            
+            /* Hide less critical info on mobile */
+            .device-info {
+                font-size: 11px;
+            }
+        }
+        
+        /* Tablet optimization */
+        @media (min-width: 769px) and (max-width: 1024px) {
+            .main-container {
+                grid-template-columns: 1fr 1fr;
+                padding: 1rem;
+            }
+            
+            .metrics-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        /* Touch-friendly improvements for all devices */
+        * {
+            -webkit-tap-highlight-color: rgba(0, 255, 159, 0.2);
+            touch-action: manipulation; /* Prevents double-tap zoom */
+        }
+        
+        /* Smooth scrolling for all containers */
+        .terminal, .device-list, .service-list, .file-list {
+            -webkit-overflow-scrolling: touch;
+            scroll-behavior: smooth;
         }
         
         .notification {
@@ -2927,9 +3044,23 @@ UI_HTML = r"""<!DOCTYPE html>
                         <option value="tag:device_discoverers">📡 DEVICE DISCOVERERS</option>
                     </select>
                     <input type="text" id="commandInput" class="command-input" 
-                           placeholder="Enter any terminal command (ls, nmap, hydra, sqlmap, metasploit, etc.)" 
-                           onkeypress="handleCommandKeyPress(event)">
-                    <button class="btn" onclick="sendTerminalCommand()">EXECUTE</button>
+                           placeholder="Type command and press Enter (e.g., ls -la, pwd, whoami, df -h, etc.)" 
+                           onkeydown="handleCommandKeyPress(event)"
+                           autocomplete="off"
+                           spellcheck="false">
+                    <button class="btn" onclick="sendTerminalCommand()" title="Execute command">EXECUTE</button>
+                    <span id="terminalConnectionStatus" style="margin-left: 1rem; font-size: 11px;">
+                        <span style="color: #00ff9f;">●</span> <span style="color: #00ff9f;">Ready</span>
+                    </span>
+                </div>
+                
+                <div style="background: rgba(0, 128, 255, 0.1); padding: 0.75rem; border-radius: 4px; margin-bottom: 0.5rem; border-left: 3px solid #0080ff;">
+                    <div style="font-size: 11px; color: #0080ff; margin-bottom: 0.3rem;">
+                        💡 <strong>Terminal Usage:</strong> Type any command in the input field above and press Enter or click EXECUTE
+                    </div>
+                    <div style="font-size: 10px; color: #666;">
+                        • Use Tab for autocomplete • ↑/↓ for history • ESC to clear • Ctrl+K to clear terminal
+                    </div>
                 </div>
                 
                 <div class="terminal-controls" style="margin-bottom: 0.5rem;">
@@ -2937,6 +3068,8 @@ UI_HTML = r"""<!DOCTYPE html>
                     <button class="btn btn-secondary" onclick="exportTerminalLog()">EXPORT LOG</button>
                     <button class="btn btn-secondary" onclick="toggleTerminalAutoscroll()">AUTO-SCROLL</button>
                     <button class="btn btn-secondary" onclick="getTerminalHistory()">HISTORY</button>
+                    <button class="btn btn-secondary" onclick="showCommandTemplates()">📋 TEMPLATES</button>
+                    <button class="btn btn-secondary" onclick="testTerminalConnection()" title="Test connection to backend">🔍 TEST</button>
                     <span style="color: #666; font-size: 11px; margin-left: 1rem;">
                         Connected Bots: <span id="connectedBotCount">0</span> | 
                         Active Operations: <span id="activeOperations">0</span>
@@ -3275,9 +3408,34 @@ UI_HTML = r"""<!DOCTYPE html>
     </div>
     
     <script>
+        // Production-ready enhancements
+        'use strict';
+        
+        // Performance monitoring
+        const performanceMetrics = {
+            apiCalls: 0,
+            errors: 0,
+            startTime: Date.now(),
+            lastActivity: Date.now()
+        };
+        
+        // Network status monitoring
+        let isOnline = navigator.onLine;
+        window.addEventListener('online', () => {
+            isOnline = true;
+            showNotification('🌐 Connection restored', 'success');
+            refreshDevices();
+        });
+        window.addEventListener('offline', () => {
+            isOnline = false;
+            showNotification('📡 Connection lost - Working in offline mode', 'warning');
+        });
+        
+        // Token validation
         const token = new URLSearchParams(window.location.search).get('token');
         if (!token) {
             document.body.innerHTML = '<div style="padding:2rem;text-align:center;color:#ff0080;">❌ ACCESS DENIED: Token required in URL</div>';
+            throw new Error('No token provided');
         }
         
         let selectedDevices = new Set(['all']);
@@ -3286,11 +3444,73 @@ UI_HTML = r"""<!DOCTYPE html>
         let commandCount = 0;
         let successfulCommands = 0;
         
-        // API Helper
-        async function api(endpoint, options = {}) {
+        // Enhanced API helper with retry logic and error handling
+        async function api(endpoint, options = {}, retries = 3) {
             const url = `${endpoint}${endpoint.includes('?') ? '&' : '?'}token=${token}`;
-            const response = await fetch(url, options);
-            return await response.json();
+            performanceMetrics.apiCalls++;
+            
+            for (let attempt = 1; attempt <= retries; attempt++) {
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+                    
+                    const response = await fetch(url, {
+                        ...options,
+                        signal: controller.signal
+                    });
+                    
+                    clearTimeout(timeoutId);
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    
+                    const data = await response.json();
+                    performanceMetrics.lastActivity = Date.now();
+                    return data;
+                    
+                } catch (error) {
+                    if (attempt === retries) {
+                        performanceMetrics.errors++;
+                        console.error(`API call failed after ${retries} attempts:`, error);
+                        
+                        // User-friendly error message
+                        if (error.name === 'AbortError') {
+                            throw new Error('Request timeout - server may be slow or unresponsive');
+                        } else if (!isOnline) {
+                            throw new Error('No network connection - check your internet');
+                        } else {
+                            throw error;
+                        }
+                    }
+                    // Wait before retry (exponential backoff)
+                    await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+                }
+            }
+        }
+        
+        // Notification system
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.className = `notification notification-${type}`;
+            notification.textContent = message;
+            notification.style.cssText = `
+                position: fixed;
+                top: 80px;
+                right: 20px;
+                padding: 1rem 1.5rem;
+                background: ${type === 'success' ? '#00ff9f' : type === 'error' ? '#ff0080' : '#00ccff'};
+                color: #0a0a0a;
+                border-radius: 4px;
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+                z-index: 10000;
+                animation: slideIn 0.3s ease;
+                max-width: 300px;
+                font-size: 14px;
+                font-weight: 500;
+            `;
+            document.body.appendChild(notification);
+            setTimeout(() => notification.remove(), 4000);
         }
         
         // Tab switching function
@@ -3316,16 +3536,7 @@ UI_HTML = r"""<!DOCTYPE html>
             }
         };
         
-        // Terminal functions
-        function appendToTerminal(message, type = 'info') {
-            const terminal = document.getElementById('terminal');
-            const timestamp = new Date().toLocaleTimeString();
-            const div = document.createElement('div');
-            div.className = `terminal-line terminal-${type}`;
-            div.innerHTML = `<span class="terminal-timestamp">[${timestamp}]</span> ${message}`;
-            terminal.appendChild(div);
-            terminal.scrollTop = terminal.scrollHeight;
-        }
+        // Terminal functions - appendToTerminal is defined later with enhanced features
         
         function appendToActivityLog(message, type = 'info') {
             const log = document.getElementById('activityLog');
@@ -3342,19 +3553,35 @@ UI_HTML = r"""<!DOCTYPE html>
             }
         }
         
-        // Device management
+        // Device management with loading states
         async function refreshDevices() {
+            // Show loading indicator
+            const deviceList = document.getElementById('deviceList');
+            const previousContent = deviceList.innerHTML;
+            deviceList.innerHTML = '<div style="padding: 1rem; text-align: center; color: #00ff9f;">⏳ Loading devices...</div>';
+            
             try {
+                // Save currently selected devices
+                const selectedDevices = Array.from(document.querySelectorAll('.device-item.selected'))
+                    .map(item => item.textContent.match(/control-[^\s⚡🔒]+/)?.[0] || item.dataset.deviceId)
+                    .filter(id => id);
+                
                 const data = await api('/api/devices');
                 const devices = data.devices || [];
                 
-                const deviceList = document.getElementById('deviceList');
                 const targetSelect = document.getElementById('targetSelect');
                 
                 deviceList.innerHTML = '';
                 targetSelect.innerHTML = '<option value="all">🌐 ALL DEVICES</option>';
                 
                 let onlineCount = 0;
+                
+                // Show message if no devices
+                if (devices.length === 0) {
+                    deviceList.innerHTML = '<div style="padding: 1rem; text-align: center; color: #666;">No devices connected. Control bot will appear here once initialized.</div>';
+                    appendToActivityLog('⚠️ No devices found - ensure control bot is running', 'warning');
+                    return;
+                }
                 
                 devices.forEach(device => {
                     const age = Math.round((Date.now() / 1000) - device.last_seen);
@@ -3363,6 +3590,13 @@ UI_HTML = r"""<!DOCTYPE html>
                     
                     const deviceItem = document.createElement('div');
                     deviceItem.className = 'device-item';
+                    deviceItem.dataset.deviceId = device.id;
+                    
+                    // Restore selection if this device was previously selected
+                    if (selectedDevices.includes(device.id)) {
+                        deviceItem.classList.add('selected');
+                    }
+                    
                     deviceItem.onclick = () => toggleDeviceSelection(device.id);
                     
                     deviceItem.innerHTML = `
@@ -3392,69 +3626,26 @@ UI_HTML = r"""<!DOCTYPE html>
                 appendToActivityLog(`📊 Device sync complete: ${devices.length} total, ${onlineCount} online`);
                 
             } catch (error) {
+                // Restore previous content on error
+                deviceList.innerHTML = previousContent || '<div style="padding: 1rem; text-align: center; color: #ff0080;">❌ Failed to load devices</div>';
+                
                 appendToTerminal(`❌ Failed to refresh devices: ${error.message}`, 'error');
+                appendToActivityLog(`❌ Device refresh failed: ${error.message}`, 'error');
+                showNotification(`Failed to refresh devices: ${error.message}`, 'error');
             }
         }
         
         function toggleDeviceSelection(deviceId) {
             const deviceItems = document.querySelectorAll('.device-item');
             deviceItems.forEach(item => {
-                if (item.textContent.includes(deviceId)) {
+                if (item.dataset.deviceId === deviceId || item.textContent.includes(deviceId)) {
                     item.classList.toggle('selected');
                 }
             });
         }
         
-        // Command execution
-        async function sendCommand() {
-            const target = document.getElementById('targetSelect').value;
-            const command = document.getElementById('commandInput').value.trim();
-            
-            if (!command) {
-                appendToTerminal('❌ Please enter a command', 'error');
-                return;
-            }
-            
-            try {
-                appendToTerminal(`📤 Executing "${command}" on ${target}...`, 'info');
-                
-                const result = await api('/api/send', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ target: target, cmd: command })
-                });
-                
-                commandCount++;
-                if (result.results) {
-                    let successful = 0;
-                    Object.values(result.results).forEach(r => {
-                        if (r.status === 'sent') successful++;
-                    });
-                    successfulCommands += successful;
-                }
-                
-                appendToTerminal(`📥 Result: ${JSON.stringify(result, null, 2)}`, 'success');
-                appendToActivityLog(`⚡ Command executed: ${command} → ${target}`);
-                
-                document.getElementById('commandInput').value = '';
-                updateMetrics();
-                
-            } catch (error) {
-                appendToTerminal(`❌ Command failed: ${error.message}`, 'error');
-                appendToActivityLog(`❌ Command failed: ${command}`, 'error');
-            }
-        }
-        
-        function sendQuickCommand(command) {
-            document.getElementById('commandInput').value = command;
-            sendCommand();
-        }
-        
-        function handleCommandKeyPress(event) {
-            if (event.key === 'Enter') {
-                sendCommand();
-            }
-        }
+        // Command execution is handled by sendTerminalCommand (defined later)
+        // Command helpers moved to later section with window assignments
         
         // File management
         function handleDragOver(event) {
@@ -3777,25 +3968,33 @@ Or manually execute the deployment script.
         
         function scanAllNetworks() {
             appendToBotResults('🔍 Initiating network scan across all scanner bots...');
+            appendToBotResults('📡 Executing: nmap -sn 192.168.1.0/24');
             executeBulkCommandOnBots('scanners', 'nmap -sn 192.168.1.0/24 && nmap -sn 10.0.0.0/24');
+            appendToBotResults('⏳ Scan in progress - results will appear in terminal output');
         }
         
         function collectSystemInfo() {
             appendToBotResults('📊 Collecting system information from all bots...');
+            appendToBotResults('📡 Gathering: OS info, memory, disk, processes');
             executeBulkCommandOnBots('all', 'uname -a && free -h && df -h && ps aux | head -10');
+            appendToBotResults('⏳ Collection in progress - check terminal for results');
         }
         
         function updateAllBots() {
             appendToBotResults('⬆️ Updating all bots...');
+            appendToBotResults('📦 Running: pkg/apt/yum update');
             executeBulkCommandOnBots('all', 'pkg update -y || apt update -y || yum update -y');
+            appendToBotResults('⏳ Update in progress - this may take several minutes');
         }
         
         function restartAllServices() {
             appendToBotResults('🔄 Restarting services on all bots...');
+            appendToBotResults('⚠️ Bots will temporarily disconnect');
             executeBulkCommandOnBots('all', 'systemctl restart unified-agent || pkill -f unified && sleep 2 && python3 unified_agent_with_ui.py --mode device &');
+            appendToBotResults('⏳ Restart in progress - bots will reconnect shortly');
         }
         
-        function executeBulkCommandOnBots(target, command) {
+        async function executeBulkCommandOnBots(target, command) {
             // Map target to proper specification
             const targetMap = {
                 'all': 'all',
@@ -3806,12 +4005,51 @@ Or manually execute the deployment script.
             
             const realTarget = targetMap[target] || target;
             
-            // Execute via main command system
-            document.getElementById('targetSelect').value = realTarget;
-            document.getElementById('commandInput').value = command;
-            sendCommand();
-            
-            appendToBotResults(`✅ Bulk command dispatched to ${target} bots`);
+            // Execute via terminal API to get real results
+            try {
+                appendToBotResults(`⚙️ Dispatching command to ${target} bots...`);
+                
+                const result = await api('/api/terminal/execute', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        target: realTarget, 
+                        command: command,
+                        user_context: 'bot_operations'
+                    })
+                });
+                
+                if (result.status === 'success' && result.execution_result) {
+                    const results = result.execution_result.results || [];
+                    appendToBotResults(`✅ Command executed on ${results.length} device(s)`);
+                    
+                    // Show results from each device
+                    results.forEach(deviceResult => {
+                        const deviceId = deviceResult.device_id || 'unknown';
+                        if (deviceResult.success) {
+                            appendToBotResults(`📋 ${deviceId}: Command completed`);
+                            if (deviceResult.output && deviceResult.output.trim()) {
+                                // Show first few lines of output
+                                const lines = deviceResult.output.split('\n').slice(0, 3);
+                                lines.forEach(line => {
+                                    if (line.trim()) {
+                                        appendToBotResults(`  ${line}`, 'info');
+                                    }
+                                });
+                                if (deviceResult.output.split('\n').length > 3) {
+                                    appendToBotResults(`  ... (see terminal for full output)`, 'info');
+                                }
+                            }
+                        } else {
+                            appendToBotResults(`❌ ${deviceId}: ${deviceResult.error || 'Failed'}`, 'error');
+                        }
+                    });
+                } else {
+                    appendToBotResults(`❌ Command failed: ${result.error || 'Unknown error'}`, 'error');
+                }
+            } catch (error) {
+                appendToBotResults(`❌ Bulk operation failed: ${error.message}`, 'error');
+            }
         }
         
         function appendToBotResults(message, type = 'info') {
@@ -3951,70 +4189,7 @@ Or manually execute the deployment script.
             }
         }
         
-        function clearTerminal() {
-            const terminal = document.getElementById('terminal');
-            terminal.innerHTML = `
-                <div class="terminal-line terminal-success">
-                    <span class="terminal-timestamp">[CLEARED]</span> 
-                    🧹 Terminal cleared - Ready for new commands
-                </div>
-            `;
-            appendToActivityLog('🧹 Terminal cleared by user');
-        }
-        
-        function exportTerminalLog() {
-            const terminal = document.getElementById('terminal');
-            const lines = Array.from(terminal.children).map(line => line.textContent).join('\n');
-            
-            const blob = new Blob([lines], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `terminal-log-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            
-            appendToTerminal('📋 Terminal log exported successfully', 'success');
-            appendToActivityLog('📋 Terminal log exported');
-        }
-        
-        function toggleTerminalAutoscroll() {
-            autoScrollEnabled = !autoScrollEnabled;
-            const button = event.target;
-            button.textContent = autoScrollEnabled ? 'AUTO-SCROLL' : 'MANUAL-SCROLL';
-            button.style.background = autoScrollEnabled ? '' : 'rgba(255, 0, 128, 0.3)';
-            
-            appendToTerminal(`${autoScrollEnabled ? '🔄' : '⏸️'} Auto-scroll ${autoScrollEnabled ? 'enabled' : 'disabled'}`, 'info');
-        }
-        
-        // Enhanced appendToTerminal to respect auto-scroll
-        const originalAppendToTerminal = appendToTerminal;
-        appendToTerminal = function(message, type = 'info') {
-            const terminal = document.getElementById('terminal');
-            const timestamp = new Date().toLocaleTimeString();
-            const div = document.createElement('div');
-            div.className = `terminal-line terminal-${type}`;
-            div.innerHTML = `<span class="terminal-timestamp">[${timestamp}]</span> ${message}`;
-            terminal.appendChild(div);
-            
-            if (autoScrollEnabled) {
-                terminal.scrollTop = terminal.scrollHeight;
-            }
-            
-            // Keep only last 100 entries for performance
-            while (terminal.children.length > 100) {
-                terminal.removeChild(terminal.firstChild);
-            }
-            
-            // Update connected bot count
-            const connectedCount = document.querySelectorAll('.device-status.online').length;
-            const countElement = document.getElementById('connectedBotCount');
-            if (countElement) {
-                countElement.textContent = connectedCount;
-            }
-        };
+        // Terminal helper functions are defined later with window assignments for global access
         
         // System simulation
         async function simulateSystemLoad() {
@@ -4054,11 +4229,39 @@ Or manually execute the deployment script.
         function sendTerminalCommand() {
             const target = document.getElementById('targetSelect').value;
             const command = document.getElementById('commandInput').value.trim();
+            const statusEl = document.getElementById('terminalConnectionStatus');
             
-            if (!command) return;
+            // Validate command
+            const validation = validateCommand(command);
+            if (!validation.valid) {
+                showNotification(validation.message, 'error');
+                // Flash the input to indicate it needs attention
+                const input = document.getElementById('commandInput');
+                input.style.border = '2px solid #ff0080';
+                setTimeout(() => input.style.border = '', 500);
+                return;
+            }
             
-            // Show command being executed
-            appendToTerminal(`📤 [${target}] ${command}`, 'command');
+            // Show warning if command is potentially dangerous
+            if (validation.warning) {
+                appendToTerminal(validation.warning, 'warning');
+            }
+            
+            // Update connection status
+            if (statusEl) {
+                statusEl.innerHTML = '<span style="color: #ffaa00;">●</span> <span style="color: #ffaa00;">Executing...</span>';
+            }
+            
+            // Update command counters
+            commandCount++;
+            updateMetrics();
+            
+            // Show command being executed with timestamp
+            const timestamp = new Date().toLocaleTimeString();
+            appendToTerminal(`📤 [${timestamp}] Executing on ${target}: ${command}`, 'command');
+            
+            // Track activity
+            performanceMetrics.lastActivity = Date.now();
             
             // Use enhanced terminal API
             api('/api/terminal/execute', {
@@ -4066,11 +4269,19 @@ Or manually execute the deployment script.
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ target, command, user_context: 'web_terminal' })
             }).then(result => {
+                // Update connection status to success
+                if (statusEl) {
+                    statusEl.innerHTML = '<span style="color: #00ff9f;">●</span> <span style="color: #00ff9f;">Ready</span>';
+                }
+                
                 if (result.status === 'success') {
                     const executionResult = result.execution_result;
                     const deviceCount = executionResult.results?.length || 0;
                     
-                    appendToTerminal(`✅ Command executed on ${deviceCount} devices`, 'success');
+                    successfulCommands++;
+                    updateMetrics();
+                    
+                    appendToTerminal(`✅ Command executed successfully on ${deviceCount} device(s)`, 'success');
                     
                     // Display output from each device
                     if (executionResult.results) {
@@ -4079,31 +4290,52 @@ Or manually execute the deployment script.
                             
                             if (deviceResult.success) {
                                 if (deviceResult.output && deviceResult.output.trim()) {
-                                    appendToTerminal(`🖥️ Output from ${deviceId}:`, 'info');
+                                    appendToTerminal(`\n🖥️  Output from ${deviceId}:`, 'info');
+                                    appendToTerminal(`${'─'.repeat(60)}`, 'info');
+                                    
                                     // Display the actual command output
                                     const outputLines = deviceResult.output.split('\n');
                                     outputLines.forEach(line => {
-                                        if (line.trim()) {
-                                            appendToTerminal(`  ${line}`, 'output');
-                                        }
+                                        appendToTerminal(`  ${line}`, 'output');
                                     });
+                                    
+                                    appendToTerminal(`${'─'.repeat(60)}`, 'info');
                                 } else {
                                     appendToTerminal(`📝 ${deviceId}: Command completed (no output)`, 'info');
                                 }
                                 
                                 if (deviceResult.execution_time) {
-                                    appendToTerminal(`⏱️ ${deviceId}: Execution time: ${deviceResult.execution_time.toFixed(2)}s`, 'info');
+                                    appendToTerminal(`⏱️  ${deviceId}: Completed in ${deviceResult.execution_time.toFixed(3)}s`, 'info');
                                 }
                             } else {
                                 appendToTerminal(`❌ ${deviceId}: ${deviceResult.error || 'Command failed'}`, 'error');
                             }
+                            
+                            appendToTerminal('', 'info'); // Blank line separator
                         });
                     }
+                    
+                    showNotification('Command executed successfully', 'success');
+                    appendToActivityLog(`✅ Executed: ${command} on ${target}`);
                 } else {
+                    performanceMetrics.errors++;
                     appendToTerminal(`❌ Terminal execution failed: ${result.error}`, 'error');
+                    showNotification(`Execution failed: ${result.error}`, 'error');
+                    appendToActivityLog(`❌ Failed: ${command}`, 'error');
                 }
             }).catch(error => {
+                // Update connection status to error
+                if (statusEl) {
+                    statusEl.innerHTML = '<span style="color: #ff0080;">●</span> <span style="color: #ff0080;">Error</span>';
+                    setTimeout(() => {
+                        statusEl.innerHTML = '<span style="color: #00ff9f;">●</span> <span style="color: #00ff9f;">Ready</span>';
+                    }, 3000);
+                }
+                
+                performanceMetrics.errors++;
                 appendToTerminal(`❌ API Error: ${error.message}`, 'error');
+                showNotification(`Error: ${error.message}`, 'error');
+                appendToActivityLog(`❌ Error: ${command}`, 'error');
             });
             
             document.getElementById('commandInput').value = '';
@@ -4117,11 +4349,99 @@ Or manually execute the deployment script.
         }
         window.sendQuickCommand = sendQuickCommand;
         
+        // Enhanced command history management with Tab completion
+        let commandHistory = [];
+        let historyIndex = -1;
+        const MAX_HISTORY = 50;
+        
+        // Common command suggestions for autocomplete
+        const commonCommands = [
+            'ls -la', 'pwd', 'whoami', 'uname -a', 'df -h', 'free -h', 'ps aux',
+            'ifconfig', 'ip addr', 'netstat -tuln', 'ss -tuln',
+            'nmap -sn', 'nmap -p-', 'ping -c 4',
+            'cat /etc/passwd', 'cat /proc/cpuinfo', 'cat /proc/meminfo',
+            'systemctl status', 'journalctl -f',
+            'docker ps', 'docker images', 'kubectl get pods',
+            'cd ..', 'cd ~', 'mkdir', 'rm -rf', 'cp -r', 'mv',
+            'find . -name', 'grep -r', 'chmod +x', 'chown',
+            'wget', 'curl', 'git status', 'git pull', 'git log',
+            'top', 'htop', 'iotop', 'vmstat', 'iostat',
+            'echo', 'cat', 'less', 'tail -f', 'head -n',
+            'sudo su', 'sudo -i'
+        ];
+        
         function handleCommandKeyPress(event) {
+            const input = document.getElementById('commandInput');
+            
             if (event.key === 'Enter') {
-                sendTerminalCommand();
+                event.preventDefault();
+                const command = input.value.trim();
+                if (command) {
+                    // Add to history (avoid duplicates)
+                    if (commandHistory[0] !== command) {
+                        commandHistory.unshift(command);
+                        if (commandHistory.length > MAX_HISTORY) {
+                            commandHistory.pop();
+                        }
+                        // Save to localStorage
+                        try {
+                            localStorage.setItem('commandHistory', JSON.stringify(commandHistory));
+                        } catch (e) {}
+                    }
+                    historyIndex = -1;
+                    sendTerminalCommand();
+                }
+            } else if (event.key === 'ArrowUp') {
+                event.preventDefault();
+                if (commandHistory.length > 0 && historyIndex < commandHistory.length - 1) {
+                    historyIndex++;
+                    input.value = commandHistory[historyIndex];
+                    // Move cursor to end
+                    setTimeout(() => input.setSelectionRange(input.value.length, input.value.length), 0);
+                }
+            } else if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                if (historyIndex > 0) {
+                    historyIndex--;
+                    input.value = commandHistory[historyIndex];
+                    setTimeout(() => input.setSelectionRange(input.value.length, input.value.length), 0);
+                } else if (historyIndex === 0) {
+                    historyIndex = -1;
+                    input.value = '';
+                }
+            } else if (event.key === 'Escape') {
+                event.preventDefault();
+                input.value = '';
+                historyIndex = -1;
+            } else if (event.key === 'Tab') {
+                event.preventDefault();
+                // Tab completion for common commands
+                const currentValue = input.value.trim();
+                if (currentValue) {
+                    const matches = commonCommands.filter(cmd => 
+                        cmd.startsWith(currentValue) && cmd !== currentValue
+                    );
+                    if (matches.length === 1) {
+                        input.value = matches[0];
+                        setTimeout(() => input.setSelectionRange(input.value.length, input.value.length), 0);
+                    } else if (matches.length > 1) {
+                        // Show suggestions in terminal
+                        appendToTerminal(`💡 Suggestions: ${matches.slice(0, 5).join(', ')}${matches.length > 5 ? '...' : ''}`, 'info');
+                    }
+                }
             }
         }
+        
+        // Load command history from localStorage
+        try {
+            const savedHistory = localStorage.getItem('commandHistory');
+            if (savedHistory) {
+                commandHistory = JSON.parse(savedHistory);
+            }
+        } catch (e) {
+            console.warn('Failed to load command history:', e);
+        }
+        
         window.handleCommandKeyPress = handleCommandKeyPress;
         
         function clearTerminal() {
@@ -4192,6 +4512,7 @@ Or manually execute the deployment script.
                 terminal.removeChild(terminal.firstChild);
             }
         }
+        window.appendToTerminal = appendToTerminal;
         
         // Device Discovery Functions
         window.showDeviceDiscovery = function() {
@@ -4475,19 +4796,266 @@ Or manually execute the deployment script.
             sendTerminalCommand();
         }
         
+        // Keyboard shortcuts for power users
+        document.addEventListener('keydown', function(e) {
+            // Ctrl/Cmd + K: Clear terminal
+            if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                e.preventDefault();
+                clearTerminal();
+                showNotification('Terminal cleared', 'info');
+            }
+            
+            // Ctrl/Cmd + L: Focus command input
+            if ((e.ctrlKey || e.metaKey) && e.key === 'l') {
+                e.preventDefault();
+                const input = document.getElementById('commandInput');
+                if (input) input.focus();
+            }
+            
+            // Ctrl/Cmd + R: Refresh devices
+            if ((e.ctrlKey || e.metaKey) && e.key === 'r') {
+                e.preventDefault();
+                refreshDevices();
+                showNotification('Refreshing devices...', 'info');
+            }
+            
+            // Ctrl/Cmd + /: Show keyboard shortcuts help
+            if ((e.ctrlKey || e.metaKey) && e.key === '/') {
+                e.preventDefault();
+                showKeyboardShortcuts();
+            }
+        });
+        
+        // Show keyboard shortcuts help
+        function showKeyboardShortcuts() {
+            const shortcuts = `
+🎮 Keyboard Shortcuts:
+
+Ctrl/⌘ + K  - Clear terminal
+Ctrl/⌘ + L  - Focus command input
+Ctrl/⌘ + R  - Refresh devices
+Ctrl/⌘ + /  - Show this help
+↑ / ↓       - Navigate command history
+Tab         - Command autocomplete
+Esc         - Clear current input
+Enter       - Execute command
+            `.trim();
+            
+            appendToTerminal(shortcuts, 'info');
+        }
+        
+        // Show command templates for real-world tasks
+        function showCommandTemplates() {
+            const templates = `
+📋 Command Templates - Real-World Tasks:
+
+🔍 RECONNAISSANCE:
+  • nmap -sV -sC -p- target_ip           # Full port scan
+  • nikto -h http://target               # Web vulnerability scan
+  • whois domain.com                     # Domain information
+  • dig domain.com                       # DNS lookup
+  • traceroute target_ip                 # Network path trace
+
+📊 SYSTEM MONITORING:
+  • watch -n 1 'df -h'                   # Live disk usage
+  • htop                                 # Interactive process viewer
+  • iostat -x 2                          # I/O statistics
+  • vmstat 2                             # Virtual memory stats
+  • netstat -an | grep ESTABLISHED       # Active connections
+
+🔐 SECURITY & LOGS:
+  • tail -f /var/log/syslog              # Live system logs
+  • grep -r "error" /var/log/            # Search error logs
+  • last -10                             # Recent logins
+  • w                                    # Who is logged in
+  • sudo iptables -L -n -v               # Firewall rules
+
+🛠️ SYSTEM ADMINISTRATION:
+  • systemctl status service_name        # Service status
+  • journalctl -u service_name -f        # Service logs
+  • ps aux | grep process_name           # Find process
+  • kill -9 PID                          # Force kill process
+  • lsof -i :port_number                 # What's using this port
+
+🐳 DOCKER MANAGEMENT:
+  • docker ps -a                         # All containers
+  • docker images                        # All images
+  • docker logs -f container_name        # Follow container logs
+  • docker exec -it container_name bash  # Container shell
+  • docker stats                         # Resource usage
+
+📦 PACKAGE MANAGEMENT:
+  • apt update && apt upgrade -y         # Ubuntu/Debian update
+  • yum update -y                        # CentOS/RHEL update
+  • pip3 list --outdated                 # Outdated Python packages
+  • npm outdated -g                      # Outdated global npm packages
+
+Use Tab for autocomplete, ↑/↓ for history navigation
+            `.trim();
+            
+            appendToTerminal(templates, 'info');
+        }
+        
+        window.showCommandTemplates = showCommandTemplates;
+        
+        // Add terminal connection test function
+        window.testTerminalConnection = function() {
+            appendToTerminal('🔍 Testing terminal connection...', 'info');
+            
+            api('/api/devices').then(result => {
+                const devices = result.devices || [];
+                if (devices.length > 0) {
+                    appendToTerminal(`✅ Connection OK - ${devices.length} device(s) available`, 'success');
+                    appendToTerminal(`📱 Connected devices: ${devices.map(d => d.id).join(', ')}`, 'info');
+                } else {
+                    appendToTerminal('⚠️  No devices connected - waiting for control bot', 'warning');
+                }
+            }).catch(error => {
+                appendToTerminal(`❌ Connection test failed: ${error.message}`, 'error');
+            });
+        };
+        
+        // Add input validation helper
+        function validateCommand(command) {
+            if (!command || command.trim().length === 0) {
+                return { valid: false, message: 'Command cannot be empty' };
+            }
+            
+            if (command.length > 1000) {
+                return { valid: false, message: 'Command too long (max 1000 characters)' };
+            }
+            
+            // Warn about potentially dangerous commands
+            const dangerousPatterns = ['rm -rf /', 'mkfs', 'dd if=', ':(){:|:&};:'];
+            for (const pattern of dangerousPatterns) {
+                if (command.includes(pattern)) {
+                    return { valid: true, warning: `⚠️  Warning: Command contains potentially dangerous pattern: ${pattern}` };
+                }
+            }
+            
+            return { valid: true };
+        }
+        
+        window.validateCommand = validateCommand;
+        
+        // Focus command input on page load (if not mobile)
+        if (window.innerWidth > 768) {
+            setTimeout(() => {
+                const input = document.getElementById('commandInput');
+                if (input) input.focus();
+            }, 500);
+        }
+        
         // Auto-refresh and initialization - Optimized intervals to reduce CPU load
         setInterval(refreshDevices, 15000);  // Reduced from 3s to 15s
         setInterval(updateUptime, 10000);    // Reduced from 1s to 10s  
         setInterval(simulateSystemLoad, 30000); // Reduced from 5s to 30s
         
-        // Initialize
+        // Initialize immediately
         refreshDevices();
         updateUptime();
         simulateSystemLoad();
+        updateBotStats();
+        
+        // Add welcome message to terminal with usage instructions
+        setTimeout(() => {
+            appendToTerminal('━'.repeat(60), 'info');
+            appendToTerminal('🚀 Welcome to Unified Control Terminal', 'success');
+            appendToTerminal('━'.repeat(60), 'info');
+            appendToTerminal('', 'info');
+            appendToTerminal('📝 How to use:', 'info');
+            appendToTerminal('  1. Click in the command input field above', 'info');
+            appendToTerminal('  2. Type any command (e.g., ls -la, pwd, whoami)', 'info');
+            appendToTerminal('  3. Press Enter or click EXECUTE', 'info');
+            appendToTerminal('', 'info');
+            appendToTerminal('⌨️  Shortcuts:', 'info');
+            appendToTerminal('  • Tab - Autocomplete commands', 'info');
+            appendToTerminal('  • ↑/↓ - Navigate command history', 'info');
+            appendToTerminal('  • ESC - Clear current input', 'info');
+            appendToTerminal('  • Ctrl+K - Clear terminal', 'info');
+            appendToTerminal('  • Ctrl+/ - Show all shortcuts', 'info');
+            appendToTerminal('', 'info');
+            appendToTerminal('📋 Click "TEMPLATES" button for command examples', 'info');
+            appendToTerminal('━'.repeat(60), 'info');
+            appendToTerminal('', 'info');
+            appendToTerminal('✅ Terminal ready - Type your first command!', 'success');
+            appendToTerminal('', 'info');
+        }, 500);
+        
+        // Add input field focus detection
+        const commandInput = document.getElementById('commandInput');
+        if (commandInput) {
+            commandInput.addEventListener('focus', function() {
+                this.style.borderColor = '#00ff9f';
+                this.style.boxShadow = '0 0 10px rgba(0, 255, 159, 0.3)';
+            });
+            
+            commandInput.addEventListener('blur', function() {
+                this.style.borderColor = '';
+                this.style.boxShadow = '';
+            });
+            
+            // Add input event to show user is typing
+            let typingTimeout;
+            commandInput.addEventListener('input', function() {
+                const statusEl = document.getElementById('terminalConnectionStatus');
+                if (statusEl && this.value.trim()) {
+                    statusEl.innerHTML = '<span style="color: #0080ff;">●</span> <span style="color: #0080ff;">Typing...</span>';
+                    
+                    clearTimeout(typingTimeout);
+                    typingTimeout = setTimeout(() => {
+                        statusEl.innerHTML = '<span style="color: #00ff9f;">●</span> <span style="color: #00ff9f;">Ready</span>';
+                    }, 1000);
+                }
+            });
+        }
+        
+        // Refresh again after 2 seconds to ensure control bot is loaded
+        setTimeout(() => {
+            refreshDevices();
+            appendToActivityLog('🔄 Initial device sync complete');
+        }, 2000);
+        
+        // Add localStorage support for persistence
+        // Save UI state periodically
+        setInterval(() => {
+            try {
+                const state = {
+                    lastSync: Date.now(),
+                    deviceCount: document.querySelectorAll('.device-item').length,
+                    onlineCount: document.querySelectorAll('.device-status.online').length,
+                    commandCount: commandCount,
+                    successfulCommands: successfulCommands
+                };
+                localStorage.setItem('unifiedControlState', JSON.stringify(state));
+            } catch (e) {
+                console.warn('localStorage save failed:', e);
+            }
+        }, 5000);
+        
+        // Restore state on load if available
+        try {
+            const savedState = localStorage.getItem('unifiedControlState');
+            if (savedState) {
+                const state = JSON.parse(savedState);
+                const timeSinceSync = Date.now() - state.lastSync;
+                if (timeSinceSync < 60000) { // Less than 1 minute ago
+                    appendToActivityLog(`📦 Restored previous session state (${Math.floor(timeSinceSync/1000)}s ago)`);
+                    commandCount = state.commandCount || 0;
+                    successfulCommands = state.successfulCommands || 0;
+                }
+            }
+        } catch (e) {
+            console.warn('localStorage restore failed:', e);
+        }
         
         appendToActivityLog('🚀 Advanced Bot Network Control Center initialized');
         appendToActivityLog('📡 50,000+ device support enabled');
         appendToActivityLog('🤖 Real terminal mode with device discovery active');
+        
+        // Initialize bot results panel
+        appendToBotResults('🚀 Bot operations panel initialized');
+        appendToBotResults('📊 Ready to execute network operations');
         
         // Global variable for current bot control
         let currentControlledBot = null;
