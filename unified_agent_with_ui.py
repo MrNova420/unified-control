@@ -3044,9 +3044,23 @@ UI_HTML = r"""<!DOCTYPE html>
                         <option value="tag:device_discoverers">📡 DEVICE DISCOVERERS</option>
                     </select>
                     <input type="text" id="commandInput" class="command-input" 
-                           placeholder="Enter any terminal command (ls, nmap, hydra, sqlmap, metasploit, etc.)" 
-                           onkeydown="handleCommandKeyPress(event)">
-                    <button class="btn" onclick="sendTerminalCommand()">EXECUTE</button>
+                           placeholder="Type command and press Enter (e.g., ls -la, pwd, whoami, df -h, etc.)" 
+                           onkeydown="handleCommandKeyPress(event)"
+                           autocomplete="off"
+                           spellcheck="false">
+                    <button class="btn" onclick="sendTerminalCommand()" title="Execute command">EXECUTE</button>
+                    <span id="terminalConnectionStatus" style="margin-left: 1rem; font-size: 11px;">
+                        <span style="color: #00ff9f;">●</span> <span style="color: #00ff9f;">Ready</span>
+                    </span>
+                </div>
+                
+                <div style="background: rgba(0, 128, 255, 0.1); padding: 0.75rem; border-radius: 4px; margin-bottom: 0.5rem; border-left: 3px solid #0080ff;">
+                    <div style="font-size: 11px; color: #0080ff; margin-bottom: 0.3rem;">
+                        💡 <strong>Terminal Usage:</strong> Type any command in the input field above and press Enter or click EXECUTE
+                    </div>
+                    <div style="font-size: 10px; color: #666;">
+                        • Use Tab for autocomplete • ↑/↓ for history • ESC to clear • Ctrl+K to clear terminal
+                    </div>
                 </div>
                 
                 <div class="terminal-controls" style="margin-bottom: 0.5rem;">
@@ -3055,6 +3069,7 @@ UI_HTML = r"""<!DOCTYPE html>
                     <button class="btn btn-secondary" onclick="toggleTerminalAutoscroll()">AUTO-SCROLL</button>
                     <button class="btn btn-secondary" onclick="getTerminalHistory()">HISTORY</button>
                     <button class="btn btn-secondary" onclick="showCommandTemplates()">📋 TEMPLATES</button>
+                    <button class="btn btn-secondary" onclick="testTerminalConnection()" title="Test connection to backend">🔍 TEST</button>
                     <span style="color: #666; font-size: 11px; margin-left: 1rem;">
                         Connected Bots: <span id="connectedBotCount">0</span> | 
                         Active Operations: <span id="activeOperations">0</span>
@@ -4214,10 +4229,27 @@ Or manually execute the deployment script.
         function sendTerminalCommand() {
             const target = document.getElementById('targetSelect').value;
             const command = document.getElementById('commandInput').value.trim();
+            const statusEl = document.getElementById('terminalConnectionStatus');
             
-            if (!command) {
-                showNotification('Please enter a command', 'warning');
+            // Validate command
+            const validation = validateCommand(command);
+            if (!validation.valid) {
+                showNotification(validation.message, 'error');
+                // Flash the input to indicate it needs attention
+                const input = document.getElementById('commandInput');
+                input.style.border = '2px solid #ff0080';
+                setTimeout(() => input.style.border = '', 500);
                 return;
+            }
+            
+            // Show warning if command is potentially dangerous
+            if (validation.warning) {
+                appendToTerminal(validation.warning, 'warning');
+            }
+            
+            // Update connection status
+            if (statusEl) {
+                statusEl.innerHTML = '<span style="color: #ffaa00;">●</span> <span style="color: #ffaa00;">Executing...</span>';
             }
             
             // Update command counters
@@ -4237,6 +4269,11 @@ Or manually execute the deployment script.
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ target, command, user_context: 'web_terminal' })
             }).then(result => {
+                // Update connection status to success
+                if (statusEl) {
+                    statusEl.innerHTML = '<span style="color: #00ff9f;">●</span> <span style="color: #00ff9f;">Ready</span>';
+                }
+                
                 if (result.status === 'success') {
                     const executionResult = result.execution_result;
                     const deviceCount = executionResult.results?.length || 0;
@@ -4287,6 +4324,14 @@ Or manually execute the deployment script.
                     appendToActivityLog(`❌ Failed: ${command}`, 'error');
                 }
             }).catch(error => {
+                // Update connection status to error
+                if (statusEl) {
+                    statusEl.innerHTML = '<span style="color: #ff0080;">●</span> <span style="color: #ff0080;">Error</span>';
+                    setTimeout(() => {
+                        statusEl.innerHTML = '<span style="color: #00ff9f;">●</span> <span style="color: #00ff9f;">Ready</span>';
+                    }, 3000);
+                }
+                
                 performanceMetrics.errors++;
                 appendToTerminal(`❌ API Error: ${error.message}`, 'error');
                 showNotification(`Error: ${error.message}`, 'error');
@@ -4853,6 +4898,46 @@ Use Tab for autocomplete, ↑/↓ for history navigation
         
         window.showCommandTemplates = showCommandTemplates;
         
+        // Add terminal connection test function
+        window.testTerminalConnection = function() {
+            appendToTerminal('🔍 Testing terminal connection...', 'info');
+            
+            api('/api/devices').then(result => {
+                const devices = result.devices || [];
+                if (devices.length > 0) {
+                    appendToTerminal(`✅ Connection OK - ${devices.length} device(s) available`, 'success');
+                    appendToTerminal(`📱 Connected devices: ${devices.map(d => d.id).join(', ')}`, 'info');
+                } else {
+                    appendToTerminal('⚠️  No devices connected - waiting for control bot', 'warning');
+                }
+            }).catch(error => {
+                appendToTerminal(`❌ Connection test failed: ${error.message}`, 'error');
+            });
+        };
+        
+        // Add input validation helper
+        function validateCommand(command) {
+            if (!command || command.trim().length === 0) {
+                return { valid: false, message: 'Command cannot be empty' };
+            }
+            
+            if (command.length > 1000) {
+                return { valid: false, message: 'Command too long (max 1000 characters)' };
+            }
+            
+            // Warn about potentially dangerous commands
+            const dangerousPatterns = ['rm -rf /', 'mkfs', 'dd if=', ':(){:|:&};:'];
+            for (const pattern of dangerousPatterns) {
+                if (command.includes(pattern)) {
+                    return { valid: true, warning: `⚠️  Warning: Command contains potentially dangerous pattern: ${pattern}` };
+                }
+            }
+            
+            return { valid: true };
+        }
+        
+        window.validateCommand = validateCommand;
+        
         // Focus command input on page load (if not mobile)
         if (window.innerWidth > 768) {
             setTimeout(() => {
@@ -4871,6 +4956,59 @@ Use Tab for autocomplete, ↑/↓ for history navigation
         updateUptime();
         simulateSystemLoad();
         updateBotStats();
+        
+        // Add welcome message to terminal with usage instructions
+        setTimeout(() => {
+            appendToTerminal('━'.repeat(60), 'info');
+            appendToTerminal('🚀 Welcome to Unified Control Terminal', 'success');
+            appendToTerminal('━'.repeat(60), 'info');
+            appendToTerminal('', 'info');
+            appendToTerminal('📝 How to use:', 'info');
+            appendToTerminal('  1. Click in the command input field above', 'info');
+            appendToTerminal('  2. Type any command (e.g., ls -la, pwd, whoami)', 'info');
+            appendToTerminal('  3. Press Enter or click EXECUTE', 'info');
+            appendToTerminal('', 'info');
+            appendToTerminal('⌨️  Shortcuts:', 'info');
+            appendToTerminal('  • Tab - Autocomplete commands', 'info');
+            appendToTerminal('  • ↑/↓ - Navigate command history', 'info');
+            appendToTerminal('  • ESC - Clear current input', 'info');
+            appendToTerminal('  • Ctrl+K - Clear terminal', 'info');
+            appendToTerminal('  • Ctrl+/ - Show all shortcuts', 'info');
+            appendToTerminal('', 'info');
+            appendToTerminal('📋 Click "TEMPLATES" button for command examples', 'info');
+            appendToTerminal('━'.repeat(60), 'info');
+            appendToTerminal('', 'info');
+            appendToTerminal('✅ Terminal ready - Type your first command!', 'success');
+            appendToTerminal('', 'info');
+        }, 500);
+        
+        // Add input field focus detection
+        const commandInput = document.getElementById('commandInput');
+        if (commandInput) {
+            commandInput.addEventListener('focus', function() {
+                this.style.borderColor = '#00ff9f';
+                this.style.boxShadow = '0 0 10px rgba(0, 255, 159, 0.3)';
+            });
+            
+            commandInput.addEventListener('blur', function() {
+                this.style.borderColor = '';
+                this.style.boxShadow = '';
+            });
+            
+            // Add input event to show user is typing
+            let typingTimeout;
+            commandInput.addEventListener('input', function() {
+                const statusEl = document.getElementById('terminalConnectionStatus');
+                if (statusEl && this.value.trim()) {
+                    statusEl.innerHTML = '<span style="color: #0080ff;">●</span> <span style="color: #0080ff;">Typing...</span>';
+                    
+                    clearTimeout(typingTimeout);
+                    typingTimeout = setTimeout(() => {
+                        statusEl.innerHTML = '<span style="color: #00ff9f;">●</span> <span style="color: #00ff9f;">Ready</span>';
+                    }, 1000);
+                }
+            });
+        }
         
         // Refresh again after 2 seconds to ensure control bot is loaded
         setTimeout(() => {
