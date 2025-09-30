@@ -3323,16 +3323,7 @@ UI_HTML = r"""<!DOCTYPE html>
             }
         };
         
-        // Terminal functions
-        function appendToTerminal(message, type = 'info') {
-            const terminal = document.getElementById('terminal');
-            const timestamp = new Date().toLocaleTimeString();
-            const div = document.createElement('div');
-            div.className = `terminal-line terminal-${type}`;
-            div.innerHTML = `<span class="terminal-timestamp">[${timestamp}]</span> ${message}`;
-            terminal.appendChild(div);
-            terminal.scrollTop = terminal.scrollHeight;
-        }
+        // Terminal functions - appendToTerminal is defined later with enhanced features
         
         function appendToActivityLog(message, type = 'info') {
             const log = document.getElementById('activityLog');
@@ -3432,56 +3423,8 @@ UI_HTML = r"""<!DOCTYPE html>
             });
         }
         
-        // Command execution
-        async function sendCommand() {
-            const target = document.getElementById('targetSelect').value;
-            const command = document.getElementById('commandInput').value.trim();
-            
-            if (!command) {
-                appendToTerminal('❌ Please enter a command', 'error');
-                return;
-            }
-            
-            try {
-                appendToTerminal(`📤 Executing "${command}" on ${target}...`, 'info');
-                
-                const result = await api('/api/send', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ target: target, cmd: command })
-                });
-                
-                commandCount++;
-                if (result.results) {
-                    let successful = 0;
-                    Object.values(result.results).forEach(r => {
-                        if (r.status === 'sent') successful++;
-                    });
-                    successfulCommands += successful;
-                }
-                
-                appendToTerminal(`📥 Result: ${JSON.stringify(result, null, 2)}`, 'success');
-                appendToActivityLog(`⚡ Command executed: ${command} → ${target}`);
-                
-                document.getElementById('commandInput').value = '';
-                updateMetrics();
-                
-            } catch (error) {
-                appendToTerminal(`❌ Command failed: ${error.message}`, 'error');
-                appendToActivityLog(`❌ Command failed: ${command}`, 'error');
-            }
-        }
-        
-        function sendQuickCommand(command) {
-            document.getElementById('commandInput').value = command;
-            sendCommand();
-        }
-        
-        function handleCommandKeyPress(event) {
-            if (event.key === 'Enter') {
-                sendCommand();
-            }
-        }
+        // Command execution is handled by sendTerminalCommand (defined later)
+        // Command helpers moved to later section with window assignments
         
         // File management
         function handleDragOver(event) {
@@ -4025,70 +3968,7 @@ Or manually execute the deployment script.
             }
         }
         
-        function clearTerminal() {
-            const terminal = document.getElementById('terminal');
-            terminal.innerHTML = `
-                <div class="terminal-line terminal-success">
-                    <span class="terminal-timestamp">[CLEARED]</span> 
-                    🧹 Terminal cleared - Ready for new commands
-                </div>
-            `;
-            appendToActivityLog('🧹 Terminal cleared by user');
-        }
-        
-        function exportTerminalLog() {
-            const terminal = document.getElementById('terminal');
-            const lines = Array.from(terminal.children).map(line => line.textContent).join('\n');
-            
-            const blob = new Blob([lines], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `terminal-log-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            
-            appendToTerminal('📋 Terminal log exported successfully', 'success');
-            appendToActivityLog('📋 Terminal log exported');
-        }
-        
-        function toggleTerminalAutoscroll() {
-            autoScrollEnabled = !autoScrollEnabled;
-            const button = event.target;
-            button.textContent = autoScrollEnabled ? 'AUTO-SCROLL' : 'MANUAL-SCROLL';
-            button.style.background = autoScrollEnabled ? '' : 'rgba(255, 0, 128, 0.3)';
-            
-            appendToTerminal(`${autoScrollEnabled ? '🔄' : '⏸️'} Auto-scroll ${autoScrollEnabled ? 'enabled' : 'disabled'}`, 'info');
-        }
-        
-        // Enhanced appendToTerminal to respect auto-scroll
-        const originalAppendToTerminal = appendToTerminal;
-        appendToTerminal = function(message, type = 'info') {
-            const terminal = document.getElementById('terminal');
-            const timestamp = new Date().toLocaleTimeString();
-            const div = document.createElement('div');
-            div.className = `terminal-line terminal-${type}`;
-            div.innerHTML = `<span class="terminal-timestamp">[${timestamp}]</span> ${message}`;
-            terminal.appendChild(div);
-            
-            if (autoScrollEnabled) {
-                terminal.scrollTop = terminal.scrollHeight;
-            }
-            
-            // Keep only last 100 entries for performance
-            while (terminal.children.length > 100) {
-                terminal.removeChild(terminal.firstChild);
-            }
-            
-            // Update connected bot count
-            const connectedCount = document.querySelectorAll('.device-status.online').length;
-            const countElement = document.getElementById('connectedBotCount');
-            if (countElement) {
-                countElement.textContent = connectedCount;
-            }
-        };
+        // Terminal helper functions are defined later with window assignments for global access
         
         // System simulation
         async function simulateSystemLoad() {
@@ -4266,6 +4146,7 @@ Or manually execute the deployment script.
                 terminal.removeChild(terminal.firstChild);
             }
         }
+        window.appendToTerminal = appendToTerminal;
         
         // Device Discovery Functions
         window.showDeviceDiscovery = function() {
