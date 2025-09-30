@@ -5,51 +5,42 @@ A next-generation, enterprise-grade device management system with an advanced we
 
 ## 🚀 **AUTOMATIC INSTALLATION - ZERO CONFIGURATION REQUIRED**
 
-### ✨ **One-Command Auto-Setup (Recommended)**
+### ✨ **Simple Start with Auto-Installation**
 
 The system now features **fully automatic dependency installation** - no manual setup required!
 
 ```bash
-# One command to install everything and start the system
-./auto_setup.sh
+# Just start the system - dependencies auto-install if missing
+python3 start_unified.py
 ```
 
 **This automatically:**
-- ✅ Checks Python version (requires 3.7+)
-- ✅ Installs/upgrades pip
-- ✅ Installs all required dependencies automatically
-- ✅ Verifies all packages are working
-- ✅ Creates necessary directories (uploads, logs)
-- ✅ Generates secure authentication token
-- ✅ Makes all scripts executable
-- ✅ Creates configuration file
-- ✅ **Ready to start immediately!**
+- ✅ Checks for required dependencies
+- ✅ Auto-installs any missing packages
+- ✅ Detects optimal settings for your system
+- ✅ Starts the server with best configuration
+- ✅ **Ready to use immediately!**
 
-### 📦 **Dependencies Are Auto-Installed**
+### 📦 **Dependencies Auto-Install on First Run**
 
-**You don't need to manually install anything!** The system includes multiple auto-installation methods:
+**You don't need to manually install anything!** Just run the start command:
 
-1. **Auto-Setup Script** (Recommended):
-   ```bash
-   ./auto_setup.sh
-   ```
+```bash
+# Smart starter auto-installs dependencies
+python3 start_unified.py
+```
 
-2. **Python Setup** (Alternative):
-   ```bash
-   python3 setup.py
-   ```
+Or run the main application directly:
+```bash
+# Main app also auto-installs dependencies
+python3 unified_agent_with_ui.py --mode server
+```
 
-3. **Smart Starter** (Auto-installs on run):
-   ```bash
-   python3 start_unified.py
-   # Dependencies will be auto-installed if missing
-   ```
-
-4. **Main Application** (Auto-installs on first run):
-   ```bash
-   python3 unified_agent_with_ui.py --mode server
-   # Dependencies will be auto-installed if missing
-   ```
+**Both methods automatically:**
+- Detect missing dependencies
+- Install them with proper fallback methods
+- Verify installation succeeded
+- Continue to start the server
 
 ### 🔄 **How Auto-Installation Works**
 
@@ -70,33 +61,36 @@ The system checks for required dependencies on every startup:
 
 ## ⚡ Quick Start Options
 
-### Option 1: Fully Automatic (Recommended)
+### Option 1: Direct Start with Auto-Install (Recommended)
 ```bash
-# One command - installs everything and starts server
-./auto_setup.sh
+# Start with auto-optimization (auto-installs dependencies)
+python3 start_unified.py
 ```
 
-### Option 2: Traditional Installer
+### Option 2: Traditional Full Installation
 ```bash
 # Full installation with system optimization
 ./install.sh
 ```
 
-### Option 3: Direct Start (Auto-installs dependencies)
+### Option 3: Simple Shell Script Start
 ```bash
-# Start with auto-optimization
-python3 start_unified.py
-```
-
-### Option 4: Simple One-Line Start
-```bash
-# Just start the server (auto-installs dependencies)
+# Quick start via shell script
 ./start_unified.sh
 ```
 
-**All methods automatically install missing dependencies!**
+**The start commands automatically install missing dependencies!**
 
-## ⚡ One-Command Deployment (After Auto-Setup)
+## ⚡ One-Command Deployment
+
+```bash
+# Clone and start (dependencies auto-install)
+git clone https://github.com/MrNova420/unified-control.git
+cd unified-control
+python3 start_unified.py
+```
+
+Access the web interface at: `http://localhost:8766/ui?token=YOUR_TOKEN`
 
 ```bash
 # Ultimate simple startup - deploy entire infrastructure!
