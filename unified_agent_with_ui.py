@@ -1296,8 +1296,13 @@ class TerminalInterface:
             
             client = clients[device_id]
             
+            # Check if this is a local device (control bot)
+            if client.get("local_device", False):
+                # Execute locally for control bot
+                return await self._execute_locally(command, user_context)
+            
             try:
-                # Send terminal command
+                # Send terminal command to remote device
                 await client["websocket"].send(json.dumps({
                     "type": "terminal_command",
                     "command": command,
@@ -3847,6 +3852,23 @@ Or manually execute the deployment script.
         }
         
         // Enhanced Terminal Functions
+        // Ensure all important functions are globally accessible
+        window.sendTerminalCommand = sendTerminalCommand;
+        window.sendQuickCommand = sendQuickCommand;
+        window.handleCommandKeyPress = handleCommandKeyPress;
+        window.clearTerminal = clearTerminal;
+        window.exportTerminalLog = exportTerminalLog;
+        window.toggleTerminalAutoscroll = toggleTerminalAutoscroll;
+        window.getTerminalHistory = getTerminalHistory;
+        window.showDeviceDiscovery = showDeviceDiscovery;
+        window.scanLocalNetwork = scanLocalNetwork;
+        window.refreshDiscoveryResults = refreshDiscoveryResults;
+        window.recruitDevice = recruitDevice;
+        window.showResourceOptimization = showResourceOptimization;
+        window.autoOptimizeResources = autoOptimizeResources;
+        window.openBotControlPanel = openBotControlPanel;
+        window.closeBotControlPanel = closeBotControlPanel;
+        
         function sendTerminalCommand() {
             const target = document.getElementById('targetSelect').value;
             const command = document.getElementById('commandInput').value.trim();
