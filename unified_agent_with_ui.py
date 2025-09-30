@@ -1837,8 +1837,8 @@ async def initialize_control_bot():
         hostname = socket.gethostname()
         local_ip = socket.gethostbyname(hostname)
         
-        # Create control bot ID
-        control_bot_id = f"control-{hostname}-{int(time.time())}"
+        # Create STABLE control bot ID (no timestamp so it's consistent across restarts)
+        control_bot_id = f"control-{hostname}"
         
         # Add to clients as master bot
         async with clients_lock:
@@ -1861,6 +1861,13 @@ async def initialize_control_bot():
                 "command_count": 0,
                 "local_device": True  # Mark as local device
             }
+        
+        # Also add to database for persistence
+        db.add_device(
+            control_bot_id,
+            ["control", "master", "admin", "local"],
+            True  # exec_allowed
+        )
         
         # Store in persistent storage
         if persistent_storage:
@@ -3345,6 +3352,11 @@ UI_HTML = r"""<!DOCTYPE html>
         // Device management
         async function refreshDevices() {
             try {
+                // Save currently selected devices
+                const selectedDevices = Array.from(document.querySelectorAll('.device-item.selected'))
+                    .map(item => item.textContent.match(/control-[^\s⚡🔒]+/)?.[0] || item.dataset.deviceId)
+                    .filter(id => id);
+                
                 const data = await api('/api/devices');
                 const devices = data.devices || [];
                 
@@ -3356,6 +3368,13 @@ UI_HTML = r"""<!DOCTYPE html>
                 
                 let onlineCount = 0;
                 
+                // Show message if no devices
+                if (devices.length === 0) {
+                    deviceList.innerHTML = '<div style="padding: 1rem; text-align: center; color: #666;">No devices connected. Control bot will appear here once initialized.</div>';
+                    appendToActivityLog('⚠️ No devices found - ensure control bot is running', 'warning');
+                    return;
+                }
+                
                 devices.forEach(device => {
                     const age = Math.round((Date.now() / 1000) - device.last_seen);
                     const isOnline = age < 60;
@@ -3363,6 +3382,13 @@ UI_HTML = r"""<!DOCTYPE html>
                     
                     const deviceItem = document.createElement('div');
                     deviceItem.className = 'device-item';
+                    deviceItem.dataset.deviceId = device.id;
+                    
+                    // Restore selection if this device was previously selected
+                    if (selectedDevices.includes(device.id)) {
+                        deviceItem.classList.add('selected');
+                    }
+                    
                     deviceItem.onclick = () => toggleDeviceSelection(device.id);
                     
                     deviceItem.innerHTML = `
@@ -3393,13 +3419,14 @@ UI_HTML = r"""<!DOCTYPE html>
                 
             } catch (error) {
                 appendToTerminal(`❌ Failed to refresh devices: ${error.message}`, 'error');
+                appendToActivityLog(`❌ Device refresh failed: ${error.message}`, 'error');
             }
         }
         
         function toggleDeviceSelection(deviceId) {
             const deviceItems = document.querySelectorAll('.device-item');
             deviceItems.forEach(item => {
-                if (item.textContent.includes(deviceId)) {
+                if (item.dataset.deviceId === deviceId || item.textContent.includes(deviceId)) {
                     item.classList.toggle('selected');
                 }
             });
@@ -3777,25 +3804,33 @@ Or manually execute the deployment script.
         
         function scanAllNetworks() {
             appendToBotResults('🔍 Initiating network scan across all scanner bots...');
+            appendToBotResults('📡 Executing: nmap -sn 192.168.1.0/24');
             executeBulkCommandOnBots('scanners', 'nmap -sn 192.168.1.0/24 && nmap -sn 10.0.0.0/24');
+            appendToBotResults('⏳ Scan in progress - results will appear in terminal output');
         }
         
         function collectSystemInfo() {
             appendToBotResults('📊 Collecting system information from all bots...');
+            appendToBotResults('📡 Gathering: OS info, memory, disk, processes');
             executeBulkCommandOnBots('all', 'uname -a && free -h && df -h && ps aux | head -10');
+            appendToBotResults('⏳ Collection in progress - check terminal for results');
         }
         
         function updateAllBots() {
             appendToBotResults('⬆️ Updating all bots...');
+            appendToBotResults('📦 Running: pkg/apt/yum update');
             executeBulkCommandOnBots('all', 'pkg update -y || apt update -y || yum update -y');
+            appendToBotResults('⏳ Update in progress - this may take several minutes');
         }
         
         function restartAllServices() {
             appendToBotResults('🔄 Restarting services on all bots...');
+            appendToBotResults('⚠️ Bots will temporarily disconnect');
             executeBulkCommandOnBots('all', 'systemctl restart unified-agent || pkill -f unified && sleep 2 && python3 unified_agent_with_ui.py --mode device &');
+            appendToBotResults('⏳ Restart in progress - bots will reconnect shortly');
         }
         
-        function executeBulkCommandOnBots(target, command) {
+        async function executeBulkCommandOnBots(target, command) {
             // Map target to proper specification
             const targetMap = {
                 'all': 'all',
@@ -3806,12 +3841,51 @@ Or manually execute the deployment script.
             
             const realTarget = targetMap[target] || target;
             
-            // Execute via main command system
-            document.getElementById('targetSelect').value = realTarget;
-            document.getElementById('commandInput').value = command;
-            sendCommand();
-            
-            appendToBotResults(`✅ Bulk command dispatched to ${target} bots`);
+            // Execute via terminal API to get real results
+            try {
+                appendToBotResults(`⚙️ Dispatching command to ${target} bots...`);
+                
+                const result = await api('/api/terminal/execute', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        target: realTarget, 
+                        command: command,
+                        user_context: 'bot_operations'
+                    })
+                });
+                
+                if (result.status === 'success' && result.execution_result) {
+                    const results = result.execution_result.results || [];
+                    appendToBotResults(`✅ Command executed on ${results.length} device(s)`);
+                    
+                    // Show results from each device
+                    results.forEach(deviceResult => {
+                        const deviceId = deviceResult.device_id || 'unknown';
+                        if (deviceResult.success) {
+                            appendToBotResults(`📋 ${deviceId}: Command completed`);
+                            if (deviceResult.output && deviceResult.output.trim()) {
+                                // Show first few lines of output
+                                const lines = deviceResult.output.split('\n').slice(0, 3);
+                                lines.forEach(line => {
+                                    if (line.trim()) {
+                                        appendToBotResults(`  ${line}`, 'info');
+                                    }
+                                });
+                                if (deviceResult.output.split('\n').length > 3) {
+                                    appendToBotResults(`  ... (see terminal for full output)`, 'info');
+                                }
+                            }
+                        } else {
+                            appendToBotResults(`❌ ${deviceId}: ${deviceResult.error || 'Failed'}`, 'error');
+                        }
+                    });
+                } else {
+                    appendToBotResults(`❌ Command failed: ${result.error || 'Unknown error'}`, 'error');
+                }
+            } catch (error) {
+                appendToBotResults(`❌ Bulk operation failed: ${error.message}`, 'error');
+            }
         }
         
         function appendToBotResults(message, type = 'info') {
@@ -4480,10 +4554,17 @@ Or manually execute the deployment script.
         setInterval(updateUptime, 10000);    // Reduced from 1s to 10s  
         setInterval(simulateSystemLoad, 30000); // Reduced from 5s to 30s
         
-        // Initialize
+        // Initialize immediately
         refreshDevices();
         updateUptime();
         simulateSystemLoad();
+        updateBotStats();
+        
+        // Refresh again after 2 seconds to ensure control bot is loaded
+        setTimeout(() => {
+            refreshDevices();
+            appendToActivityLog('🔄 Initial device sync complete');
+        }, 2000);
         
         appendToActivityLog('🚀 Advanced Bot Network Control Center initialized');
         appendToActivityLog('📡 50,000+ device support enabled');
