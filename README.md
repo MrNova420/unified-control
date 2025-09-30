@@ -3,7 +3,100 @@
 
 A next-generation, enterprise-grade device management system with an advanced web dashboard, designed for comprehensive control over device networks with professional-grade features and enterprise scalability. **For educational and authorized testing purposes only.**
 
-## ⚡ One-Command Deployment
+## 🚀 **AUTOMATIC INSTALLATION - ZERO CONFIGURATION REQUIRED**
+
+### ✨ **One-Command Auto-Setup (Recommended)**
+
+The system now features **fully automatic dependency installation** - no manual setup required!
+
+```bash
+# One command to install everything and start the system
+./auto_setup.sh
+```
+
+**This automatically:**
+- ✅ Checks Python version (requires 3.7+)
+- ✅ Installs/upgrades pip
+- ✅ Installs all required dependencies automatically
+- ✅ Verifies all packages are working
+- ✅ Creates necessary directories (uploads, logs)
+- ✅ Generates secure authentication token
+- ✅ Makes all scripts executable
+- ✅ Creates configuration file
+- ✅ **Ready to start immediately!**
+
+### 📦 **Dependencies Are Auto-Installed**
+
+**You don't need to manually install anything!** The system includes multiple auto-installation methods:
+
+1. **Auto-Setup Script** (Recommended):
+   ```bash
+   ./auto_setup.sh
+   ```
+
+2. **Python Setup** (Alternative):
+   ```bash
+   python3 setup.py
+   ```
+
+3. **Smart Starter** (Auto-installs on run):
+   ```bash
+   python3 start_unified.py
+   # Dependencies will be auto-installed if missing
+   ```
+
+4. **Main Application** (Auto-installs on first run):
+   ```bash
+   python3 unified_agent_with_ui.py --mode server
+   # Dependencies will be auto-installed if missing
+   ```
+
+### 🔄 **How Auto-Installation Works**
+
+The system checks for required dependencies on every startup:
+- If dependencies are missing, they're automatically installed
+- Uses `pip` with `--user` flag for user-level installation
+- Falls back to system-wide installation if needed
+- Verifies installation before proceeding
+- Restarts automatically after installation completes
+
+**Required Dependencies** (all auto-installed):
+- `websockets>=13.0.1` - WebSocket server/client
+- `aiohttp>=3.9.1` - Async HTTP server
+- `aiofiles>=24.1.0` - Async file operations
+- `psutil>=6.0.0` - System monitoring
+- `requests>=2.32.0` - HTTP client
+- `cryptography>=42.0.0` - Security features
+
+## ⚡ Quick Start Options
+
+### Option 1: Fully Automatic (Recommended)
+```bash
+# One command - installs everything and starts server
+./auto_setup.sh
+```
+
+### Option 2: Traditional Installer
+```bash
+# Full installation with system optimization
+./install.sh
+```
+
+### Option 3: Direct Start (Auto-installs dependencies)
+```bash
+# Start with auto-optimization
+python3 start_unified.py
+```
+
+### Option 4: Simple One-Line Start
+```bash
+# Just start the server (auto-installs dependencies)
+./start_unified.sh
+```
+
+**All methods automatically install missing dependencies!**
+
+## ⚡ One-Command Deployment (After Auto-Setup)
 
 ```bash
 # Ultimate simple startup - deploy entire infrastructure!

@@ -26,13 +26,78 @@ from typing import Dict, List, Optional, Any
 import threading
 import psutil
 
+def check_and_install_dependencies():
+    """Check for required dependencies and auto-install if missing"""
+    required_packages = {
+        'websockets': 'websockets>=13.0.1',
+        'aiohttp': 'aiohttp>=3.9.1',
+        'aiofiles': 'aiofiles>=24.1.0',
+        'psutil': 'psutil>=6.0.0',
+        'requests': 'requests>=2.32.0'
+    }
+    
+    missing_packages = []
+    
+    for package_name, package_spec in required_packages.items():
+        try:
+            __import__(package_name)
+        except ImportError:
+            missing_packages.append(package_spec)
+    
+    if missing_packages:
+        print("📦 Missing dependencies detected. Auto-installing...")
+        print(f"   Packages to install: {', '.join(missing_packages)}")
+        
+        try:
+            import subprocess
+            import sys
+            
+            # Try pip3 first, then pip
+            pip_cmd = 'pip3' if subprocess.run(['which', 'pip3'], capture_output=True).returncode == 0 else 'pip'
+            
+            # Install missing packages
+            for package in missing_packages:
+                print(f"   Installing {package}...")
+                result = subprocess.run(
+                    [pip_cmd, 'install', '--user', package],
+                    capture_output=True,
+                    text=True,
+                    timeout=120
+                )
+                
+                if result.returncode != 0:
+                    print(f"   ⚠️  Warning: Failed to install {package}")
+                    print(f"   Error: {result.stderr}")
+                else:
+                    print(f"   ✅ Successfully installed {package}")
+            
+            print("✅ Dependency installation complete!")
+            print("   Restarting application...")
+            
+            # Restart the script to use newly installed packages
+            os.execv(sys.executable, [sys.executable] + sys.argv)
+            
+        except Exception as e:
+            print(f"❌ Auto-installation failed: {e}")
+            print("\n📋 Manual installation required:")
+            print("   pip install -r requirements.txt")
+            print("   OR")
+            print(f"   pip install {' '.join(missing_packages)}")
+            sys.exit(1)
+    
+    return True
+
+# Check and auto-install dependencies before importing
+check_and_install_dependencies()
+
 try:
     import websockets
     from aiohttp import web, MultipartReader
     import aiofiles
-except ImportError:
-    print("Missing dependencies. Install with:")
-    print("pip install websockets aiohttp aiofiles psutil")
+except ImportError as e:
+    print(f"❌ Dependency import failed after installation attempt: {e}")
+    print("📋 Please manually install dependencies:")
+    print("   pip install -r requirements.txt")
     sys.exit(1)
 
 # Configuration - Auto-optimized for maximum performance
