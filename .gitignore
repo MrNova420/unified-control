@@ -1,0 +1,33 @@
+# Unified Control System
+unified_control.sqlite*
+unified_control.log*
+uploads/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Sensitive configuration (uncomment if you want to exclude)
+# unified_control_config.sh
+
+# Temporary files
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
