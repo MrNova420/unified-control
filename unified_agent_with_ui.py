@@ -3045,7 +3045,7 @@ UI_HTML = r"""<!DOCTYPE html>
                     </select>
                     <input type="text" id="commandInput" class="command-input" 
                            placeholder="Enter any terminal command (ls, nmap, hydra, sqlmap, metasploit, etc.)" 
-                           onkeypress="handleCommandKeyPress(event)">
+                           onkeydown="handleCommandKeyPress(event)">
                     <button class="btn" onclick="sendTerminalCommand()">EXECUTE</button>
                 </div>
                 
@@ -3054,6 +3054,7 @@ UI_HTML = r"""<!DOCTYPE html>
                     <button class="btn btn-secondary" onclick="exportTerminalLog()">EXPORT LOG</button>
                     <button class="btn btn-secondary" onclick="toggleTerminalAutoscroll()">AUTO-SCROLL</button>
                     <button class="btn btn-secondary" onclick="getTerminalHistory()">HISTORY</button>
+                    <button class="btn btn-secondary" onclick="showCommandTemplates()">📋 TEMPLATES</button>
                     <span style="color: #666; font-size: 11px; margin-left: 1rem;">
                         Connected Bots: <span id="connectedBotCount">0</span> | 
                         Active Operations: <span id="activeOperations">0</span>
@@ -4214,10 +4215,21 @@ Or manually execute the deployment script.
             const target = document.getElementById('targetSelect').value;
             const command = document.getElementById('commandInput').value.trim();
             
-            if (!command) return;
+            if (!command) {
+                showNotification('Please enter a command', 'warning');
+                return;
+            }
             
-            // Show command being executed
-            appendToTerminal(`📤 [${target}] ${command}`, 'command');
+            // Update command counters
+            commandCount++;
+            updateMetrics();
+            
+            // Show command being executed with timestamp
+            const timestamp = new Date().toLocaleTimeString();
+            appendToTerminal(`📤 [${timestamp}] Executing on ${target}: ${command}`, 'command');
+            
+            // Track activity
+            performanceMetrics.lastActivity = Date.now();
             
             // Use enhanced terminal API
             api('/api/terminal/execute', {
@@ -4229,7 +4241,10 @@ Or manually execute the deployment script.
                     const executionResult = result.execution_result;
                     const deviceCount = executionResult.results?.length || 0;
                     
-                    appendToTerminal(`✅ Command executed on ${deviceCount} devices`, 'success');
+                    successfulCommands++;
+                    updateMetrics();
+                    
+                    appendToTerminal(`✅ Command executed successfully on ${deviceCount} device(s)`, 'success');
                     
                     // Display output from each device
                     if (executionResult.results) {
@@ -4238,31 +4253,44 @@ Or manually execute the deployment script.
                             
                             if (deviceResult.success) {
                                 if (deviceResult.output && deviceResult.output.trim()) {
-                                    appendToTerminal(`🖥️ Output from ${deviceId}:`, 'info');
+                                    appendToTerminal(`\n🖥️  Output from ${deviceId}:`, 'info');
+                                    appendToTerminal(`${'─'.repeat(60)}`, 'info');
+                                    
                                     // Display the actual command output
                                     const outputLines = deviceResult.output.split('\n');
                                     outputLines.forEach(line => {
-                                        if (line.trim()) {
-                                            appendToTerminal(`  ${line}`, 'output');
-                                        }
+                                        appendToTerminal(`  ${line}`, 'output');
                                     });
+                                    
+                                    appendToTerminal(`${'─'.repeat(60)}`, 'info');
                                 } else {
                                     appendToTerminal(`📝 ${deviceId}: Command completed (no output)`, 'info');
                                 }
                                 
                                 if (deviceResult.execution_time) {
-                                    appendToTerminal(`⏱️ ${deviceId}: Execution time: ${deviceResult.execution_time.toFixed(2)}s`, 'info');
+                                    appendToTerminal(`⏱️  ${deviceId}: Completed in ${deviceResult.execution_time.toFixed(3)}s`, 'info');
                                 }
                             } else {
                                 appendToTerminal(`❌ ${deviceId}: ${deviceResult.error || 'Command failed'}`, 'error');
                             }
+                            
+                            appendToTerminal('', 'info'); // Blank line separator
                         });
                     }
+                    
+                    showNotification('Command executed successfully', 'success');
+                    appendToActivityLog(`✅ Executed: ${command} on ${target}`);
                 } else {
+                    performanceMetrics.errors++;
                     appendToTerminal(`❌ Terminal execution failed: ${result.error}`, 'error');
+                    showNotification(`Execution failed: ${result.error}`, 'error');
+                    appendToActivityLog(`❌ Failed: ${command}`, 'error');
                 }
             }).catch(error => {
+                performanceMetrics.errors++;
                 appendToTerminal(`❌ API Error: ${error.message}`, 'error');
+                showNotification(`Error: ${error.message}`, 'error');
+                appendToActivityLog(`❌ Error: ${command}`, 'error');
             });
             
             document.getElementById('commandInput').value = '';
@@ -4276,15 +4304,32 @@ Or manually execute the deployment script.
         }
         window.sendQuickCommand = sendQuickCommand;
         
-        // Enhanced command history management
+        // Enhanced command history management with Tab completion
         let commandHistory = [];
         let historyIndex = -1;
         const MAX_HISTORY = 50;
+        
+        // Common command suggestions for autocomplete
+        const commonCommands = [
+            'ls -la', 'pwd', 'whoami', 'uname -a', 'df -h', 'free -h', 'ps aux',
+            'ifconfig', 'ip addr', 'netstat -tuln', 'ss -tuln',
+            'nmap -sn', 'nmap -p-', 'ping -c 4',
+            'cat /etc/passwd', 'cat /proc/cpuinfo', 'cat /proc/meminfo',
+            'systemctl status', 'journalctl -f',
+            'docker ps', 'docker images', 'kubectl get pods',
+            'cd ..', 'cd ~', 'mkdir', 'rm -rf', 'cp -r', 'mv',
+            'find . -name', 'grep -r', 'chmod +x', 'chown',
+            'wget', 'curl', 'git status', 'git pull', 'git log',
+            'top', 'htop', 'iotop', 'vmstat', 'iostat',
+            'echo', 'cat', 'less', 'tail -f', 'head -n',
+            'sudo su', 'sudo -i'
+        ];
         
         function handleCommandKeyPress(event) {
             const input = document.getElementById('commandInput');
             
             if (event.key === 'Enter') {
+                event.preventDefault();
                 const command = input.value.trim();
                 if (command) {
                     // Add to history (avoid duplicates)
@@ -4299,26 +4344,46 @@ Or manually execute the deployment script.
                         } catch (e) {}
                     }
                     historyIndex = -1;
+                    sendTerminalCommand();
                 }
-                sendTerminalCommand();
             } else if (event.key === 'ArrowUp') {
                 event.preventDefault();
                 if (commandHistory.length > 0 && historyIndex < commandHistory.length - 1) {
                     historyIndex++;
                     input.value = commandHistory[historyIndex];
+                    // Move cursor to end
+                    setTimeout(() => input.setSelectionRange(input.value.length, input.value.length), 0);
                 }
             } else if (event.key === 'ArrowDown') {
                 event.preventDefault();
                 if (historyIndex > 0) {
                     historyIndex--;
                     input.value = commandHistory[historyIndex];
+                    setTimeout(() => input.setSelectionRange(input.value.length, input.value.length), 0);
                 } else if (historyIndex === 0) {
                     historyIndex = -1;
                     input.value = '';
                 }
             } else if (event.key === 'Escape') {
+                event.preventDefault();
                 input.value = '';
                 historyIndex = -1;
+            } else if (event.key === 'Tab') {
+                event.preventDefault();
+                // Tab completion for common commands
+                const currentValue = input.value.trim();
+                if (currentValue) {
+                    const matches = commonCommands.filter(cmd => 
+                        cmd.startsWith(currentValue) && cmd !== currentValue
+                    );
+                    if (matches.length === 1) {
+                        input.value = matches[0];
+                        setTimeout(() => input.setSelectionRange(input.value.length, input.value.length), 0);
+                    } else if (matches.length > 1) {
+                        // Show suggestions in terminal
+                        appendToTerminal(`💡 Suggestions: ${matches.slice(0, 5).join(', ')}${matches.length > 5 ? '...' : ''}`, 'info');
+                    }
+                }
             }
         }
         
@@ -4726,12 +4791,67 @@ Ctrl/⌘ + L  - Focus command input
 Ctrl/⌘ + R  - Refresh devices
 Ctrl/⌘ + /  - Show this help
 ↑ / ↓       - Navigate command history
+Tab         - Command autocomplete
 Esc         - Clear current input
 Enter       - Execute command
             `.trim();
             
             appendToTerminal(shortcuts, 'info');
         }
+        
+        // Show command templates for real-world tasks
+        function showCommandTemplates() {
+            const templates = `
+📋 Command Templates - Real-World Tasks:
+
+🔍 RECONNAISSANCE:
+  • nmap -sV -sC -p- target_ip           # Full port scan
+  • nikto -h http://target               # Web vulnerability scan
+  • whois domain.com                     # Domain information
+  • dig domain.com                       # DNS lookup
+  • traceroute target_ip                 # Network path trace
+
+📊 SYSTEM MONITORING:
+  • watch -n 1 'df -h'                   # Live disk usage
+  • htop                                 # Interactive process viewer
+  • iostat -x 2                          # I/O statistics
+  • vmstat 2                             # Virtual memory stats
+  • netstat -an | grep ESTABLISHED       # Active connections
+
+🔐 SECURITY & LOGS:
+  • tail -f /var/log/syslog              # Live system logs
+  • grep -r "error" /var/log/            # Search error logs
+  • last -10                             # Recent logins
+  • w                                    # Who is logged in
+  • sudo iptables -L -n -v               # Firewall rules
+
+🛠️ SYSTEM ADMINISTRATION:
+  • systemctl status service_name        # Service status
+  • journalctl -u service_name -f        # Service logs
+  • ps aux | grep process_name           # Find process
+  • kill -9 PID                          # Force kill process
+  • lsof -i :port_number                 # What's using this port
+
+🐳 DOCKER MANAGEMENT:
+  • docker ps -a                         # All containers
+  • docker images                        # All images
+  • docker logs -f container_name        # Follow container logs
+  • docker exec -it container_name bash  # Container shell
+  • docker stats                         # Resource usage
+
+📦 PACKAGE MANAGEMENT:
+  • apt update && apt upgrade -y         # Ubuntu/Debian update
+  • yum update -y                        # CentOS/RHEL update
+  • pip3 list --outdated                 # Outdated Python packages
+  • npm outdated -g                      # Outdated global npm packages
+
+Use Tab for autocomplete, ↑/↓ for history navigation
+            `.trim();
+            
+            appendToTerminal(templates, 'info');
+        }
+        
+        window.showCommandTemplates = showCommandTemplates;
         
         // Focus command input on page load (if not mobile)
         if (window.innerWidth > 768) {
