@@ -1,5 +1,6 @@
 # 🤖 Unified Control System For Learning Only- Advanced Botnet Management Platform
 for learning only
+
 A next-generation, enterprise-grade botnet management system with an advanced web dashboard, designed for Termux mobile devices and production environments. This system provides comprehensive control over massive bot networks with professional-grade features and enterprise scalability.
 
 ## ⚡ One-Command Deployment
