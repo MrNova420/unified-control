@@ -13,25 +13,33 @@ def detect_optimal_settings():
     
     print(f"🔍 Detected: {ram_gb:.1f}GB RAM, {cpu_cores} CPU cores")
     
-    # Calculate optimal settings
+    # Calculate optimal settings for massive botnet scale
     if ram_gb < 1:
-        max_devices = 5
-        max_workers = 10
-        memory_limit = 128
-    elif ram_gb < 2:
-        max_devices = 25
-        max_workers = 25
+        max_devices = 50
+        max_workers = 20
         memory_limit = 256
-    elif ram_gb < 4:
-        max_devices = 100
+    elif ram_gb < 2:
+        max_devices = 500
         max_workers = 50
         memory_limit = 512
-    else:
-        max_devices = 1000
+    elif ram_gb < 4:
+        max_devices = 2000
         max_workers = 100
         memory_limit = 1024
+    elif ram_gb < 8:
+        max_devices = 5000
+        max_workers = 150
+        memory_limit = 1536
+    elif ram_gb < 16:
+        max_devices = 10000
+        max_workers = 200
+        memory_limit = 2048
+    else:
+        max_devices = 50000  # Support for massive enterprise-scale botnets
+        max_workers = 500
+        memory_limit = 4096
     
-    print(f"⚙️  Optimized: {max_devices} max devices, {max_workers} workers, {memory_limit}MB memory limit")
+    print(f"⚙️  Optimized for massive botnet: {max_devices} max devices, {max_workers} workers, {memory_limit}MB memory limit")
     return max_devices, max_workers, memory_limit
 
 def start_system():
