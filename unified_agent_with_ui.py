@@ -52,10 +52,10 @@ MAX_CPU_PERCENT = 95  # Near maximum CPU usage
 MAX_MEMORY_MB = 4096  # 4GB memory for intensive operations
 MAX_OUTPUT_SIZE = 50 * 1024 * 1024  # 50MB output for large operations
 
-# Load balancing and performance for massive scale - Auto-optimized
-MAX_CONCURRENT_COMMANDS = 500  # 500 concurrent workers
-COMMAND_QUEUE_SIZE = 10000  # Large command queue
-DEVICE_BATCH_SIZE = 500  # Process more devices per batch
+# Load balancing and performance - Optimized for stability and low resource usage
+MAX_CONCURRENT_COMMANDS = 50   # Reduced from 500 to 50 for better stability
+COMMAND_QUEUE_SIZE = 1000      # Reduced from 10000 to 1000 for memory efficiency  
+DEVICE_BATCH_SIZE = 50         # Reduced from 500 to 50 for lower strain
 
 # Auto resource optimization
 def auto_optimize_resources():
@@ -69,29 +69,29 @@ def auto_optimize_resources():
         global MAX_DEVICES, MAX_CONCURRENT_COMMANDS, MAX_MEMORY_MB
         
         if ram_gb < 1:  # Mobile devices
-            MAX_DEVICES = min(100, MAX_DEVICES)
-            MAX_CONCURRENT_COMMANDS = min(25, MAX_CONCURRENT_COMMANDS)
-            MAX_MEMORY_MB = min(512, MAX_MEMORY_MB)
+            MAX_DEVICES = min(50, MAX_DEVICES)
+            MAX_CONCURRENT_COMMANDS = min(10, MAX_CONCURRENT_COMMANDS)
+            MAX_MEMORY_MB = min(256, MAX_MEMORY_MB)
         elif ram_gb < 2:  # Low-end devices
-            MAX_DEVICES = min(500, MAX_DEVICES)
-            MAX_CONCURRENT_COMMANDS = min(50, MAX_CONCURRENT_COMMANDS)
-            MAX_MEMORY_MB = min(1024, MAX_MEMORY_MB)
+            MAX_DEVICES = min(200, MAX_DEVICES)
+            MAX_CONCURRENT_COMMANDS = min(20, MAX_CONCURRENT_COMMANDS)
+            MAX_MEMORY_MB = min(512, MAX_MEMORY_MB)
         elif ram_gb < 4:  # Medium devices
-            MAX_DEVICES = min(2000, MAX_DEVICES)
-            MAX_CONCURRENT_COMMANDS = min(100, MAX_CONCURRENT_COMMANDS)
-            MAX_MEMORY_MB = min(2048, MAX_MEMORY_MB)
+            MAX_DEVICES = min(500, MAX_DEVICES)
+            MAX_CONCURRENT_COMMANDS = min(30, MAX_CONCURRENT_COMMANDS)
+            MAX_MEMORY_MB = min(1024, MAX_MEMORY_MB)
         elif ram_gb < 8:  # High-end devices
-            MAX_DEVICES = min(5000, MAX_DEVICES)
-            MAX_CONCURRENT_COMMANDS = min(150, MAX_CONCURRENT_COMMANDS)
-            MAX_MEMORY_MB = min(3072, MAX_MEMORY_MB)
+            MAX_DEVICES = min(1000, MAX_DEVICES)
+            MAX_CONCURRENT_COMMANDS = min(40, MAX_CONCURRENT_COMMANDS)
+            MAX_MEMORY_MB = min(2048, MAX_MEMORY_MB)
         elif ram_gb < 16:  # Enterprise devices
-            MAX_DEVICES = min(10000, MAX_DEVICES)
-            MAX_CONCURRENT_COMMANDS = min(200, MAX_CONCURRENT_COMMANDS)
-            MAX_MEMORY_MB = min(4096, MAX_MEMORY_MB)
+            MAX_DEVICES = min(2000, MAX_DEVICES)
+            MAX_CONCURRENT_COMMANDS = min(50, MAX_CONCURRENT_COMMANDS)
+            MAX_MEMORY_MB = min(3072, MAX_MEMORY_MB)
         else:  # Supercomputers/Data centers
-            MAX_DEVICES = 50000
-            MAX_CONCURRENT_COMMANDS = 500
-            MAX_MEMORY_MB = min(int(ram_gb * 1024 * 0.8), 8192)  # Use 80% of RAM, max 8GB
+            MAX_DEVICES = 5000  # Reduced from 50000 for stability
+            MAX_CONCURRENT_COMMANDS = 100  # Reduced from 500 for stability
+            MAX_MEMORY_MB = min(int(ram_gb * 1024 * 0.6), 4096)  # Use 60% of RAM, max 4GB
             
         logging.info(f"Auto-optimized: {MAX_DEVICES} devices, {MAX_CONCURRENT_COMMANDS} workers, {MAX_MEMORY_MB}MB memory")
         return True
@@ -733,6 +733,14 @@ class DeviceManager:
                 services_by_device[device_id] = []
             services_by_device[device_id].append(service)
         return services_by_device
+    
+    def cleanup_empty_groups(self):
+        """Remove empty groups to prevent memory bloat"""
+        empty_groups = [group for group, devices in self.groups.items() if not devices]
+        for group in empty_groups:
+            del self.groups[group]
+        if empty_groups:
+            logging.info(f"Cleaned up {len(empty_groups)} empty device groups")
 
 class ServiceManager:
     """Manage auto-restart and persistent services"""
@@ -4341,6 +4349,34 @@ async def cleanup_stale_clients():
         except Exception as e:
             logging.error(f"Cleanup error: {e}")
 
+async def memory_optimizer():
+    """Periodic memory optimization and resource cleanup"""
+    while True:
+        try:
+            await asyncio.sleep(300)  # Run every 5 minutes
+            
+            # Clear command queue if it's getting too large
+            if command_queue.qsize() > COMMAND_QUEUE_SIZE * 0.8:
+                while command_queue.qsize() > COMMAND_QUEUE_SIZE * 0.5:
+                    try:
+                        command_queue.get_nowait()
+                    except asyncio.QueueEmpty:
+                        break
+                logging.info("Command queue cleared to prevent overflow")
+            
+            # Clean up old device groups
+            device_manager.cleanup_empty_groups()
+            
+            # Log current resource usage
+            memory_percent = psutil.virtual_memory().percent
+            cpu_percent = psutil.cpu_percent(interval=None)
+            
+            if memory_percent > 80 or cpu_percent > 80:
+                logging.warning(f"High resource usage detected: CPU {cpu_percent}%, Memory {memory_percent}%")
+                
+        except Exception as e:
+            logging.error(f"Memory optimizer error: {e}")
+
 def main():
     """Main application entry point"""
     global db, AUTH_TOKEN, HOST, WS_PORT, HTTP_PORT, UPLOAD_DIR
@@ -4424,7 +4460,9 @@ def main():
             await site.start()
             
             # Start cleanup task
+            # Start cleanup and optimization tasks
             asyncio.create_task(cleanup_stale_clients())
+            asyncio.create_task(memory_optimizer())
             
             logging.info("Server started successfully with load balancer")
             print("✅ Server is running. Press Ctrl+C to stop.")
