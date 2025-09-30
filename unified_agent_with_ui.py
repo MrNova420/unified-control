@@ -1147,6 +1147,177 @@ UI_HTML = """<!DOCTYPE html>
             background: linear-gradient(90deg, #00ff9f, #00cc7f);
             transition: width 0.3s ease;
         }
+        
+        /* Bot Management Styles */
+        .panel-controls {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .bot-management {
+            margin-bottom: 1rem;
+        }
+        
+        .bot-creation-section {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 1rem;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+            border: 1px solid rgba(0, 255, 159, 0.3);
+        }
+        
+        .bot-action-buttons {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+        
+        .bot-control-header {
+            margin-bottom: 1.5rem;
+        }
+        
+        .bot-overview-stats {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        
+        .stat-card {
+            background: rgba(0, 0, 0, 0.5);
+            padding: 1rem;
+            border-radius: 4px;
+            border: 1px solid rgba(0, 255, 159, 0.3);
+            text-align: center;
+            flex: 1;
+        }
+        
+        .stat-number {
+            font-size: 24px;
+            font-weight: bold;
+            color: #00ff9f;
+        }
+        
+        .stat-label {
+            font-size: 11px;
+            color: #666;
+            text-transform: uppercase;
+            margin-top: 0.5rem;
+        }
+        
+        .bot-templates-section {
+            margin-bottom: 1.5rem;
+        }
+        
+        .bot-templates-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.75rem;
+            margin-top: 0.75rem;
+        }
+        
+        .bot-template-card {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(0, 255, 159, 0.3);
+            border-radius: 4px;
+            padding: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+        
+        .bot-template-card:hover {
+            background: rgba(0, 255, 159, 0.1);
+            border-color: #00ff9f;
+            transform: translateY(-2px);
+        }
+        
+        .template-icon {
+            font-size: 24px;
+            margin-bottom: 0.5rem;
+        }
+        
+        .template-name {
+            font-weight: bold;
+            color: #00ff9f;
+            margin-bottom: 0.25rem;
+        }
+        
+        .template-desc {
+            font-size: 11px;
+            color: #666;
+        }
+        
+        .bulk-bot-operations {
+            margin-bottom: 1.5rem;
+        }
+        
+        .bulk-controls {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+            flex-wrap: wrap;
+        }
+        
+        .bulk-controls select {
+            flex: 1;
+            min-width: 150px;
+        }
+        
+        .custom-command-area {
+            margin-top: 0.75rem;
+        }
+        
+        .bot-network-operations {
+            margin-bottom: 1.5rem;
+        }
+        
+        .network-operations-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+        }
+        
+        .operation-btn {
+            background: rgba(0, 128, 255, 0.1);
+            border: 1px solid #0080ff;
+            color: #0080ff;
+            padding: 0.75rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.25rem;
+        }
+        
+        .operation-btn:hover {
+            background: rgba(0, 128, 255, 0.2);
+            transform: scale(1.05);
+        }
+        
+        .op-icon {
+            font-size: 18px;
+        }
+        
+        .op-label {
+            font-size: 11px;
+            font-weight: bold;
+        }
+        
+        .bot-results-area {
+            margin-bottom: 1rem;
+        }
+        
+        .network-stats {
+            margin-top: 1rem;
+        }
+        
+        .group-tag.active {
+            background: #00ff9f;
+            color: #0a0a0a;
+        }
     </style>
 </head>
 <body>
@@ -1173,33 +1344,66 @@ UI_HTML = """<!DOCTYPE html>
     </header>
     
     <div class="main-container">
-        <!-- Left Panel: Device Management -->
+        <!-- Left Panel: Bot Network Management -->
         <div class="panel">
             <div class="panel-header">
-                <div class="panel-title">🤖 DEVICE FLEET</div>
-                <button class="btn btn-secondary" onclick="refreshDevices()">SYNC</button>
+                <div class="panel-title">🤖 BOT NETWORK FLEET</div>
+                <div class="panel-controls">
+                    <button class="btn btn-secondary" onclick="refreshDevices()">SYNC</button>
+                    <button class="btn" onclick="showCreateBotModal()">CREATE BOT</button>
+                </div>
             </div>
             
-            <div class="device-groups">
-                <div class="group-tag" onclick="filterByGroup('all')">ALL</div>
-                <div class="group-tag" onclick="filterByGroup('production')">PROD</div>
-                <div class="group-tag" onclick="filterByGroup('staging')">STAGE</div>
-                <div class="group-tag" onclick="filterByGroup('mobile')">MOBILE</div>
-                <div class="group-tag" onclick="filterByGroup('servers')">SERVERS</div>
+            <div class="bot-management">
+                <div class="bot-creation-section">
+                    <h4 style="color: #00ff9f; margin-bottom: 0.5rem;">⚡ Bot Network Control</h4>
+                    <div class="bot-controls">
+                        <select id="botTemplateSelect" class="command-input" style="margin-bottom: 0.5rem;">
+                            <option value="mobile">📱 Mobile Termux Bot</option>
+                            <option value="server">🖥️ Server Bot</option>
+                            <option value="scanner">🔍 Network Scanner Bot</option>
+                            <option value="monitor">📊 Monitor Bot</option>
+                            <option value="proxy">🌐 Proxy Bot</option>
+                        </select>
+                        <div class="bot-action-buttons">
+                            <button class="btn" onclick="deployBotTemplate()">DEPLOY BOT</button>
+                            <button class="btn btn-danger" onclick="removeSelectedBots()">REMOVE BOTS</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="device-groups">
+                    <div class="group-tag active" onclick="filterByGroup('all')">ALL BOTS</div>
+                    <div class="group-tag" onclick="filterByGroup('production')">PRODUCTION</div>
+                    <div class="group-tag" onclick="filterByGroup('staging')">STAGING</div>
+                    <div class="group-tag" onclick="filterByGroup('mobile')">MOBILE</div>
+                    <div class="group-tag" onclick="filterByGroup('servers')">SERVERS</div>
+                    <div class="group-tag" onclick="filterByGroup('scanners')">SCANNERS</div>
+                </div>
             </div>
             
             <div class="device-list" id="deviceList">
-                <!-- Devices will be populated here -->
+                <!-- Bot devices will be populated here -->
             </div>
             
-            <div class="metrics-grid">
-                <div class="metric-item">
-                    <div class="metric-value" id="totalCommands">0</div>
-                    <div class="metric-label">Commands</div>
-                </div>
-                <div class="metric-item">
-                    <div class="metric-value" id="successRate">100%</div>
-                    <div class="metric-label">Success</div>
+            <div class="network-stats">
+                <div class="metrics-grid">
+                    <div class="metric-item">
+                        <div class="metric-value" id="totalBots">0</div>
+                        <div class="metric-label">Total Bots</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-value" id="activeBots">0</div>
+                        <div class="metric-label">Active</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-value" id="totalCommands">0</div>
+                        <div class="metric-label">Commands</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-value" id="successRate">100%</div>
+                        <div class="metric-label">Success</div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1210,6 +1414,7 @@ UI_HTML = """<!DOCTYPE html>
                 <div class="panel-title">⚡ COMMAND CENTER</div>
                 <div class="command-tabs">
                     <div class="tab active" onclick="switchTab('terminal')">TERMINAL</div>
+                    <div class="tab" onclick="switchTab('bots')">BOT CONTROL</div>
                     <div class="tab" onclick="switchTab('files')">FILES</div>
                     <div class="tab" onclick="switchTab('services')">SERVICES</div>
                 </div>
@@ -1243,6 +1448,110 @@ UI_HTML = """<!DOCTYPE html>
                     <div class="terminal-line terminal-info">
                         <span class="terminal-timestamp">[INFO]</span> 
                         📡 Monitoring device connections and awaiting commands
+                    </div>
+                </div>
+            </div>
+            
+            <div id="botsTab" class="tab-content" style="display: none;">
+                <div class="bot-control-header">
+                    <h3 style="color: #00ff9f; margin-bottom: 1rem;">🤖 Advanced Bot Network Control</h3>
+                    <div class="bot-overview-stats">
+                        <div class="stat-card">
+                            <div class="stat-number" id="networkBotCount">0</div>
+                            <div class="stat-label">Network Bots</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number" id="onlineBotCount">0</div>
+                            <div class="stat-label">Online</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number" id="executingBotCount">0</div>
+                            <div class="stat-label">Executing</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bot-templates-section">
+                    <h4 style="color: #00ff9f; margin-bottom: 0.5rem;">⚡ Bot Templates & Deployment</h4>
+                    <div class="bot-templates-grid">
+                        <div class="bot-template-card" onclick="deployBotType('termux')">
+                            <div class="template-icon">📱</div>
+                            <div class="template-name">Termux Mobile Bot</div>
+                            <div class="template-desc">Android device with full Termux capabilities</div>
+                        </div>
+                        <div class="bot-template-card" onclick="deployBotType('server')">
+                            <div class="template-icon">🖥️</div>
+                            <div class="template-name">Server Bot</div>
+                            <div class="template-desc">Linux server with system admin tools</div>
+                        </div>
+                        <div class="bot-template-card" onclick="deployBotType('scanner')">
+                            <div class="template-icon">🔍</div>
+                            <div class="template-name">Network Scanner</div>
+                            <div class="template-desc">Automated network reconnaissance</div>
+                        </div>
+                        <div class="bot-template-card" onclick="deployBotType('monitor')">
+                            <div class="template-icon">📊</div>
+                            <div class="template-name">Monitor Bot</div>
+                            <div class="template-desc">System monitoring and metrics</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bulk-bot-operations">
+                    <h4 style="color: #00ff9f; margin-bottom: 0.5rem;">🔧 Bulk Bot Operations</h4>
+                    <div class="bulk-controls">
+                        <select id="bulkTargetSelect" class="command-input">
+                            <option value="all">All Bots</option>
+                            <option value="mobile">Mobile Bots</option>
+                            <option value="servers">Server Bots</option>
+                            <option value="scanners">Scanner Bots</option>
+                        </select>
+                        <select id="bulkActionSelect" class="command-input">
+                            <option value="status">Get Status</option>
+                            <option value="update">Update System</option>
+                            <option value="restart">Restart Service</option>
+                            <option value="scan_network">Scan Network</option>
+                            <option value="collect_info">Collect System Info</option>
+                            <option value="execute_custom">Execute Custom Command</option>
+                        </select>
+                        <button class="btn" onclick="executeBulkAction()">EXECUTE BULK</button>
+                    </div>
+                    
+                    <div class="custom-command-area" id="customCommandArea" style="display: none;">
+                        <input type="text" id="customBulkCommand" class="command-input" 
+                               placeholder="Enter custom command for bulk execution">
+                    </div>
+                </div>
+                
+                <div class="bot-network-operations">
+                    <h4 style="color: #00ff9f; margin-bottom: 0.5rem;">🌐 Network Operations</h4>
+                    <div class="network-operations-grid">
+                        <button class="operation-btn" onclick="scanAllNetworks()">
+                            <div class="op-icon">🔍</div>
+                            <div class="op-label">SCAN NETWORKS</div>
+                        </button>
+                        <button class="operation-btn" onclick="collectSystemInfo()">
+                            <div class="op-icon">📊</div>
+                            <div class="op-label">COLLECT INFO</div>
+                        </button>
+                        <button class="operation-btn" onclick="updateAllBots()">
+                            <div class="op-icon">⬆️</div>
+                            <div class="op-label">UPDATE BOTS</div>
+                        </button>
+                        <button class="operation-btn" onclick="restartAllServices()">
+                            <div class="op-icon">🔄</div>
+                            <div class="op-label">RESTART ALL</div>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="bot-results-area">
+                    <h4 style="color: #00ff9f; margin-bottom: 0.5rem;">📋 Operation Results</h4>
+                    <div class="terminal" id="botResultsTerminal" style="max-height: 300px;">
+                        <div class="terminal-line terminal-success">
+                            <span class="terminal-timestamp">[BOT-NETWORK]</span> 
+                            🤖 Bot Network Control Center Ready
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1587,6 +1896,9 @@ UI_HTML = """<!DOCTYPE html>
                 refreshFiles();
             } else if (tabName === 'services') {
                 refreshServices();
+            } else if (tabName === 'bots') {
+                updateBotStats();
+                appendToBotResults('🤖 Bot Control Center activated');
             }
         }
         
@@ -1626,6 +1938,237 @@ UI_HTML = """<!DOCTYPE html>
         function exportLogs() {
             appendToTerminal('📋 Log export feature in development...', 'info');
         }
+        
+        // Advanced Bot Management Functions
+        function showCreateBotModal() {
+            const botType = document.getElementById('botTemplateSelect').value;
+            const botId = prompt(`Enter Bot ID for ${botType} bot:`, `${botType}-${Date.now()}`);
+            if (botId) {
+                createBot(botType, botId);
+            }
+        }
+        
+        async function createBot(botType, botId) {
+            try {
+                appendToTerminal(`🤖 Creating ${botType} bot: ${botId}...`, 'info');
+                appendToBotResults(`🚀 Deploying ${botType} bot with ID: ${botId}`);
+                
+                const result = await api('/api/bot/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        bot_type: botType,
+                        bot_id: botId,
+                        exec_allowed: true,
+                        tags: [botType, 'managed']
+                    })
+                });
+                
+                if (result.status === 'success') {
+                    appendToBotResults(`✅ Bot ${botId} created successfully`);
+                    appendToBotResults(`📋 Deployment script generated`);
+                    appendToBotResults(`📡 Bot ready for connection...`);
+                    
+                    // Show deployment instructions
+                    const instructions = `
+To connect this bot, run the following on the target device:
+
+curl -sSL "data:text/plain;base64,${btoa(result.deployment_script)}" | bash
+
+Or manually execute the deployment script.
+                    `;
+                    
+                    appendToBotResults(`📋 Deployment Instructions:`);
+                    appendToBotResults(instructions);
+                    
+                    // Update bot count
+                    updateBotStats();
+                    refreshDevices();
+                    
+                    appendToTerminal(`✅ Bot ${botId} created and ready for deployment`, 'success');
+                    appendToActivityLog(`🤖 New bot created: ${botId} (${botType})`);
+                } else {
+                    throw new Error(result.error || 'Unknown error');
+                }
+                
+            } catch (error) {
+                appendToTerminal(`❌ Failed to create bot: ${error.message}`, 'error');
+                appendToBotResults(`❌ Bot creation failed: ${error.message}`);
+            }
+        }
+        
+        function deployBotTemplate() {
+            const template = document.getElementById('botTemplateSelect').value;
+            const botId = `${template}-${Date.now()}`;
+            createBot(template, botId);
+        }
+        
+        function deployBotType(botType) {
+            const botId = `${botType}-${Date.now()}`;
+            createBot(botType, botId);
+        }
+        
+        async function removeSelectedBots() {
+            const selectedDevices = document.querySelectorAll('.device-item.selected');
+            if (selectedDevices.length === 0) {
+                appendToTerminal('⚠️ No bots selected for removal', 'warning');
+                return;
+            }
+            
+            if (!confirm(`Remove ${selectedDevices.length} selected bot(s)? This will disconnect them from the network.`)) {
+                return;
+            }
+            
+            try {
+                appendToBotResults(`🗑️ Removing ${selectedDevices.length} bot(s)...`);
+                
+                for (let device of selectedDevices) {
+                    const botId = device.querySelector('strong').textContent;
+                    appendToBotResults(`🔴 Disconnecting bot: ${botId}`);
+                    
+                    const result = await api('/api/bot/remove', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ bot_id: botId })
+                    });
+                    
+                    if (result.status === 'success') {
+                        appendToBotResults(`✅ Bot ${botId} removed successfully`);
+                        device.remove();
+                    } else {
+                        appendToBotResults(`❌ Failed to remove bot ${botId}: ${result.error}`);
+                    }
+                }
+                
+                updateBotStats();
+                refreshDevices();
+                appendToBotResults(`✅ Bot removal operation completed`);
+                appendToTerminal(`✅ Removed ${selectedDevices.length} bot(s)`, 'success');
+                
+            } catch (error) {
+                appendToTerminal(`❌ Failed to remove bots: ${error.message}`, 'error');
+                appendToBotResults(`❌ Bot removal failed: ${error.message}`);
+            }
+        }
+        
+        function executeBulkAction() {
+            const target = document.getElementById('bulkTargetSelect').value;
+            const action = document.getElementById('bulkActionSelect').value;
+            
+            if (action === 'execute_custom') {
+                document.getElementById('customCommandArea').style.display = 'block';
+                return;
+            }
+            
+            document.getElementById('customCommandArea').style.display = 'none';
+            
+            const actionCommands = {
+                'status': 'echo "Bot Status: Online" && uptime',
+                'update': 'pkg update -y || apt update -y || yum update -y',
+                'restart': 'systemctl restart unified-agent || pkill -f unified',
+                'scan_network': 'nmap -sn 192.168.1.0/24 || ping -c 1 8.8.8.8',
+                'collect_info': 'uname -a && free -h && df -h && whoami'
+            };
+            
+            const command = actionCommands[action];
+            if (command) {
+                appendToBotResults(`🚀 Executing bulk action "${action}" on ${target} bots`);
+                appendToBotResults(`📡 Command: ${command}`);
+                
+                // Execute via main command system
+                document.getElementById('targetSelect').value = target === 'all' ? 'all' : `tag:${target}`;
+                document.getElementById('commandInput').value = command;
+                sendCommand();
+            }
+        }
+        
+        function scanAllNetworks() {
+            appendToBotResults('🔍 Initiating network scan across all scanner bots...');
+            executeBulkCommandOnBots('scanners', 'nmap -sn 192.168.1.0/24 && nmap -sn 10.0.0.0/24');
+        }
+        
+        function collectSystemInfo() {
+            appendToBotResults('📊 Collecting system information from all bots...');
+            executeBulkCommandOnBots('all', 'uname -a && free -h && df -h && ps aux | head -10');
+        }
+        
+        function updateAllBots() {
+            appendToBotResults('⬆️ Updating all bots...');
+            executeBulkCommandOnBots('all', 'pkg update -y || apt update -y || yum update -y');
+        }
+        
+        function restartAllServices() {
+            appendToBotResults('🔄 Restarting services on all bots...');
+            executeBulkCommandOnBots('all', 'systemctl restart unified-agent || pkill -f unified && sleep 2 && python3 unified_agent_with_ui.py --mode device &');
+        }
+        
+        function executeBulkCommandOnBots(target, command) {
+            // Map target to proper specification
+            const targetMap = {
+                'all': 'all',
+                'mobile': 'tag:mobile',
+                'servers': 'tag:servers', 
+                'scanners': 'tag:scanners'
+            };
+            
+            const realTarget = targetMap[target] || target;
+            
+            // Execute via main command system
+            document.getElementById('targetSelect').value = realTarget;
+            document.getElementById('commandInput').value = command;
+            sendCommand();
+            
+            appendToBotResults(`✅ Bulk command dispatched to ${target} bots`);
+        }
+        
+        function appendToBotResults(message, type = 'info') {
+            const terminal = document.getElementById('botResultsTerminal');
+            if (!terminal) return;
+            
+            const timestamp = new Date().toLocaleTimeString();
+            const div = document.createElement('div');
+            div.className = `terminal-line terminal-${type}`;
+            div.innerHTML = `<span class="terminal-timestamp">[${timestamp}]</span> ${message}`;
+            terminal.appendChild(div);
+            terminal.scrollTop = terminal.scrollHeight;
+            
+            // Keep only last 30 entries
+            while (terminal.children.length > 30) {
+                terminal.removeChild(terminal.firstChild);
+            }
+        }
+        
+        function updateBotStats() {
+            // Update bot network statistics
+            const devices = document.querySelectorAll('.device-item');
+            const totalBots = devices.length;
+            const onlineBots = document.querySelectorAll('.device-status.online').length;
+            const executingBots = 0; // Would be calculated from active commands
+            
+            // Update main stats
+            if (document.getElementById('totalBots')) {
+                document.getElementById('totalBots').textContent = totalBots;
+            }
+            if (document.getElementById('activeBots')) {
+                document.getElementById('activeBots').textContent = onlineBots;
+            }
+            if (document.getElementById('networkBotCount')) {
+                document.getElementById('networkBotCount').textContent = totalBots;
+            }
+            if (document.getElementById('onlineBotCount')) {
+                document.getElementById('onlineBotCount').textContent = onlineBots;
+            }
+            if (document.getElementById('executingBotCount')) {
+                document.getElementById('executingBotCount').textContent = executingBots;
+            }
+        }
+        
+        // Enhanced device refresh to update bot stats
+        const originalRefreshDevices = refreshDevices;
+        refreshDevices = async function() {
+            await originalRefreshDevices();
+            updateBotStats();
+        };
         
         // System simulation
         function simulateSystemLoad() {
@@ -1926,6 +2469,183 @@ async def api_bulk_command(request):
         logging.error(f"Bulk command error: {e}")
         return web.json_response({"error": str(e)}, status=500)
 
+async def api_create_bot(request):
+    """Create a new bot/device"""
+    token = request.query.get("token", "")
+    if token != AUTH_TOKEN:
+        return web.json_response({"error": "unauthorized"}, status=401)
+    
+    try:
+        data = await request.json()
+        bot_type = data.get("bot_type", "mobile")
+        bot_id = data.get("bot_id")
+        tags = data.get("tags", [bot_type])
+        exec_allowed = data.get("exec_allowed", True)
+        
+        if not bot_id:
+            bot_id = f"{bot_type}-{int(time.time())}"
+        
+        # Generate bot deployment script
+        bot_script = generate_bot_script(bot_id, bot_type, tags, exec_allowed)
+        
+        # Store bot configuration
+        bot_config = {
+            "bot_id": bot_id,
+            "bot_type": bot_type,
+            "tags": tags,
+            "exec_allowed": exec_allowed,
+            "created_at": time.time(),
+            "script": bot_script,
+            "status": "created"
+        }
+        
+        # Add to device manager
+        device_manager.add_device_to_group(bot_id, bot_type)
+        for tag in tags:
+            device_manager.add_device_to_group(bot_id, tag)
+        
+        return web.json_response({
+            "status": "success",
+            "bot_id": bot_id,
+            "bot_type": bot_type,
+            "deployment_script": bot_script,
+            "config": bot_config
+        })
+        
+    except Exception as e:
+        logging.error(f"Bot creation error: {e}")
+        return web.json_response({"error": str(e)}, status=500)
+
+async def api_remove_bot(request):
+    """Remove a bot/device"""
+    token = request.query.get("token", "")
+    if token != AUTH_TOKEN:
+        return web.json_response({"error": "unauthorized"}, status=401)
+    
+    try:
+        data = await request.json()
+        bot_id = data.get("bot_id")
+        
+        if not bot_id:
+            return web.json_response({"error": "bot_id required"}, status=400)
+        
+        # Remove from all groups
+        for group in list(device_manager.groups.keys()):
+            device_manager.remove_device_from_group(bot_id, group)
+        
+        # Disconnect if online
+        async with clients_lock:
+            if bot_id in clients:
+                try:
+                    await clients[bot_id]["websocket"].send(json.dumps({
+                        "type": "shutdown",
+                        "message": "Bot removed from network"
+                    }))
+                    del clients[bot_id]
+                except:
+                    pass
+        
+        db.log_audit(bot_id, "bot_removal", "remove_bot", "success", "web_api")
+        
+        return web.json_response({
+            "status": "success",
+            "bot_id": bot_id,
+            "message": "Bot removed successfully"
+        })
+        
+    except Exception as e:
+        logging.error(f"Bot removal error: {e}")
+        return web.json_response({"error": str(e)}, status=500)
+
+async def api_bot_templates(request):
+    """Get available bot templates"""
+    token = request.query.get("token", "")
+    if token != AUTH_TOKEN:
+        return web.json_response({"error": "unauthorized"}, status=401)
+    
+    templates = {
+        "mobile": {
+            "name": "Termux Mobile Bot",
+            "description": "Android device with full Termux capabilities",
+            "icon": "📱",
+            "default_tags": ["mobile", "termux"],
+            "capabilities": ["shell", "network", "file_operations", "system_info"]
+        },
+        "server": {
+            "name": "Server Bot", 
+            "description": "Linux server with system admin tools",
+            "icon": "🖥️",
+            "default_tags": ["server", "linux"],
+            "capabilities": ["shell", "network", "file_operations", "system_admin", "services"]
+        },
+        "scanner": {
+            "name": "Network Scanner",
+            "description": "Automated network reconnaissance",
+            "icon": "🔍", 
+            "default_tags": ["scanner", "network"],
+            "capabilities": ["network_scan", "port_scan", "service_discovery"]
+        },
+        "monitor": {
+            "name": "Monitor Bot",
+            "description": "System monitoring and metrics",
+            "icon": "📊",
+            "default_tags": ["monitor", "metrics"],
+            "capabilities": ["system_monitoring", "performance_metrics", "alerts"]
+        },
+        "proxy": {
+            "name": "Proxy Bot", 
+            "description": "Network proxy and traffic management",
+            "icon": "🌐",
+            "default_tags": ["proxy", "network"],
+            "capabilities": ["proxy", "traffic_routing", "load_balancing"]
+        }
+    }
+    
+    return web.json_response({"templates": templates})
+
+def generate_bot_script(bot_id, bot_type, tags, exec_allowed):
+    """Generate deployment script for a bot"""
+    script = f"""#!/bin/bash
+# Auto-generated bot deployment script
+# Bot ID: {bot_id}
+# Bot Type: {bot_type}
+# Generated: {time.strftime('%Y-%m-%d %H:%M:%S')}
+
+echo "🤖 Deploying {bot_type} bot: {bot_id}"
+
+# Install dependencies if needed
+if command -v pkg >/dev/null 2>&1; then
+    # Termux environment
+    pkg update -y
+    pkg install python git curl -y
+elif command -v apt >/dev/null 2>&1; then
+    # Debian/Ubuntu
+    apt update -y
+    apt install python3 python3-pip git curl -y
+fi
+
+# Install Python dependencies
+pip install websockets aiohttp psutil requests
+
+# Download unified agent if not present
+if [ ! -f "unified_agent_with_ui.py" ]; then
+    curl -sSL https://raw.githubusercontent.com/MrNova420/unified-control/main/unified_agent_with_ui.py -o unified_agent_with_ui.py
+    chmod +x unified_agent_with_ui.py
+fi
+
+# Start bot with configuration
+python3 unified_agent_with_ui.py \\
+    --mode device \\
+    --id "{bot_id}" \\
+    --server "${{UC_SERVER_URL:-ws://127.0.0.1:8765}}" \\
+    --auth "${{UC_AUTH_TOKEN}}" \\
+    {"--exec-allowed" if exec_allowed else ""} \\
+    --tags {" ".join(tags)}
+
+echo "✅ Bot {bot_id} deployment completed"
+"""
+    return script
+
 def start_http_server():
     """Initialize HTTP server"""
     app = web.Application()
@@ -1946,6 +2666,11 @@ def start_http_server():
     app.router.add_post("/api/device/services", api_device_services)
     app.router.add_get("/api/system/stats", api_system_stats)
     app.router.add_post("/api/bulk/command", api_bulk_command)
+    
+    # Bot Management API endpoints
+    app.router.add_post("/api/bot/create", api_create_bot)
+    app.router.add_post("/api/bot/remove", api_remove_bot)
+    app.router.add_get("/api/bot/templates", api_bot_templates)
     
     return app
 
