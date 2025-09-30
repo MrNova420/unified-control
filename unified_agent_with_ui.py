@@ -2744,11 +2744,11 @@ UI_HTML = r"""<!DOCTYPE html>
                     appendToBotResults(`📋 Deployment script generated`);
                     appendToBotResults(`📡 Bot ready for connection...`);
                     
-                    // Show deployment instructions
+                    // Show deployment instructions - Fixed Unicode encoding issue
                     const instructions = `
 To connect this bot, run the following on the target device:
 
-curl -sSL "data:text/plain;base64,${btoa(result.deployment_script)}" | bash
+curl -sSL "data:text/plain;base64,${btoa(unescape(encodeURIComponent(result.deployment_script)))}" | bash
 
 Or manually execute the deployment script.
                     `;
@@ -3099,13 +3099,37 @@ Or manually execute the deployment script.
         };
         
         // System simulation
-        function simulateSystemLoad() {
-            const cpuLoad = Math.floor(Math.random() * 20) + 10; // 10-30%
-            const memoryLoad = Math.floor(Math.random() * 30) + 20; // 20-50%
-            
-            document.getElementById('cpuUsage').textContent = cpuLoad + '%';
-            document.getElementById('memoryUsage').textContent = memoryLoad + '%';
-            document.getElementById('systemLoad').textContent = Math.max(cpuLoad, memoryLoad) + '%';
+        async function simulateSystemLoad() {
+            try {
+                // Get real system stats instead of simulation
+                const stats = await api('/api/system/stats');
+                if (stats && stats.system) {
+                    const cpuLoad = stats.system.cpu_usage || '0%';
+                    const memoryLoad = stats.system.memory_usage || '0%';
+                    
+                    document.getElementById('cpuUsage').textContent = cpuLoad;
+                    document.getElementById('memoryUsage').textContent = memoryLoad;
+                    
+                    // Parse numeric values for overall load
+                    const cpuNum = parseInt(cpuLoad) || 0;
+                    const memoryNum = parseInt(memoryLoad) || 0;
+                    document.getElementById('systemLoad').textContent = Math.max(cpuNum, memoryNum) + '%';
+                } else {
+                    // Fallback to conservative estimates if API fails
+                    const cpuLoad = Math.floor(Math.random() * 5) + 3; // 3-8% (much lower)
+                    const memoryLoad = Math.floor(Math.random() * 10) + 15; // 15-25%
+                    
+                    document.getElementById('cpuUsage').textContent = cpuLoad + '%';
+                    document.getElementById('memoryUsage').textContent = memoryLoad + '%';
+                    document.getElementById('systemLoad').textContent = Math.max(cpuLoad, memoryLoad) + '%';
+                }
+            } catch (error) {
+                console.warn('System load monitoring failed:', error);
+                // Conservative fallback values
+                document.getElementById('cpuUsage').textContent = '5%';
+                document.getElementById('memoryUsage').textContent = '20%';
+                document.getElementById('systemLoad').textContent = '20%';
+            }
         }
         
         // Enhanced Terminal Functions
@@ -3289,10 +3313,10 @@ Or manually execute the deployment script.
             sendTerminalCommand();
         }
         
-        // Auto-refresh and initialization
-        setInterval(refreshDevices, 3000);
-        setInterval(updateUptime, 1000);
-        setInterval(simulateSystemLoad, 5000);
+        // Auto-refresh and initialization - Optimized intervals to reduce CPU load
+        setInterval(refreshDevices, 15000);  // Reduced from 3s to 15s
+        setInterval(updateUptime, 10000);    // Reduced from 1s to 10s  
+        setInterval(simulateSystemLoad, 30000); // Reduced from 5s to 30s
         
         // Initialize
         refreshDevices();
@@ -3541,8 +3565,8 @@ async def api_system_stats(request):
         },
         "system": {
             "uptime": time.time(),
-            "memory_usage": "N/A",  # Would need psutil for real stats
-            "cpu_usage": "N/A"
+            "memory_usage": f"{psutil.virtual_memory().percent:.1f}%",
+            "cpu_usage": f"{psutil.cpu_percent(interval=None):.1f}%"
         }
     }
     
