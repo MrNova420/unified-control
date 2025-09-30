@@ -6,6 +6,7 @@ The system had multiple issues preventing proper operation:
 2. Default token being displayed instead of actual configured token
 3. UI features not working due to JavaScript syntax errors
 4. System appearing to start but features non-functional
+5. Two conflicting start commands causing confusion
 
 ## Fixes Applied
 
@@ -87,15 +88,35 @@ Active: 1
 Success Rate: 100%
 ```
 
+### 5. Start Command Conflict (start_unified.sh)
+
+**Problem:** The bash script `start_unified.sh` was regenerating `start_unified.py`, overwriting the fixes applied to the Python file. This caused confusion because:
+- Running `python3 start_unified.py` would use the fixed version
+- Running `./start_unified.sh` would recreate an old version without the fixes
+
+**Solution:**
+- Modified `start_unified.sh` to be a simple wrapper around `start_unified.py`
+- Removed the code generation logic (lines 20-88) that was creating a conflicting version
+- Now both commands use the same fixed `start_unified.py` file
+
+**Result:** Both start commands now work correctly and consistently
+
 ## Files Modified
 1. `start_unified.py` - Configuration loading and dependency management
 2. `unified_agent_with_ui.py` - System metrics error handling and JavaScript fixes
+3. `start_unified.sh` - Converted to wrapper script to avoid overwriting fixes
 
 ## Breaking Changes
 None - All changes are backward compatible
+
+## Start Commands
+Both commands now work identically:
+- `python3 start_unified.py` - Direct execution
+- `./start_unified.sh` - Bash wrapper with config loading and startup messages
 
 ## Notes
 - System now works in restricted environments where `/proc/stat` access is denied
 - Authentication token security improved by loading from config file
 - UI is fully functional for managing bot network
 - All original features preserved and working correctly
+- Both start methods use the same improved startup code
