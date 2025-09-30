@@ -88,35 +88,33 @@ Active: 1
 Success Rate: 100%
 ```
 
-### 5. Start Command Conflict (start_unified.sh)
+### 5. Start Command Consolidation (start_unified.sh)
 
-**Problem:** The bash script `start_unified.sh` was regenerating `start_unified.py`, overwriting the fixes applied to the Python file. This caused confusion because:
-- Running `python3 start_unified.py` would use the fixed version
-- Running `./start_unified.sh` would recreate an old version without the fixes
+**Problem:** The bash script `start_unified.sh` was regenerating `start_unified.py`, overwriting the fixes applied to the Python file. This created confusion with multiple start commands when only one was needed.
 
 **Solution:**
-- Modified `start_unified.sh` to be a simple wrapper around `start_unified.py`
-- Removed the code generation logic (lines 20-88) that was creating a conflicting version
-- Now both commands use the same fixed `start_unified.py` file
+- Removed `start_unified.sh` entirely to eliminate confusion
+- Consolidated to single start command: `python3 start_unified.py`
+- Updated all documentation to reference only the Python start command
 
-**Result:** Both start commands now work correctly and consistently
+**Result:** Single, consistent start command across all documentation
 
 ## Files Modified
 1. `start_unified.py` - Configuration loading and dependency management
 2. `unified_agent_with_ui.py` - System metrics error handling and JavaScript fixes
-3. `start_unified.sh` - Converted to wrapper script to avoid overwriting fixes
+3. `start_unified.sh` - Removed (consolidated to single start command)
+4. `README.md` - Updated to reference only `python3 start_unified.py`
 
 ## Breaking Changes
-None - All changes are backward compatible
+None - All changes are backward compatible. Users previously using `./start_unified.sh` should now use `python3 start_unified.py`
 
-## Start Commands
-Both commands now work identically:
-- `python3 start_unified.py` - Direct execution
-- `./start_unified.sh` - Bash wrapper with config loading and startup messages
+## Start Command
+**Single unified start command:**
+- `python3 start_unified.py` - Starts system with auto-dependency installation, config loading, and optimal settings
 
 ## Notes
 - System now works in restricted environments where `/proc/stat` access is denied
 - Authentication token security improved by loading from config file
 - UI is fully functional for managing bot network
 - All original features preserved and working correctly
-- Both start methods use the same improved startup code
+- Single start command eliminates confusion and maintains all functionality

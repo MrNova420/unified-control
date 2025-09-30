@@ -73,13 +73,7 @@ python3 start_unified.py
 ./install.sh
 ```
 
-### Option 3: Simple Shell Script Start
-```bash
-# Quick start via shell script
-./start_unified.sh
-```
-
-**The start commands automatically install missing dependencies!**
+**The start command automatically installs missing dependencies!**
 
 ## ⚡ One-Command Deployment
 
@@ -91,11 +85,6 @@ python3 start_unified.py
 ```
 
 Access the web interface at: `http://localhost:8766/ui?token=YOUR_TOKEN`
-
-```bash
-# Ultimate simple startup - deploy entire infrastructure!
-./start_unified.sh
-```
 
 **That's it!** This automatically:
 - 🔍 Detects your hardware capabilities (supports up to 50,000 devices)
@@ -196,14 +185,14 @@ Access the web interface at: `http://localhost:8766/ui?token=YOUR_TOKEN`
 pkg update && pkg install python git curl
 git clone https://github.com/MrNova420/unified-control.git
 cd unified-control
-./start_unified.sh
+python3 start_unified.py
 ```
 
 ### Linux/Server - Main Control Infrastructure
 ```bash
 git clone https://github.com/MrNova420/unified-control.git
 cd unified-control
-./install.sh && ./start_unified.sh
+./install.sh && python3 start_unified.py
 ```
 
 ### Advanced Installation Options
