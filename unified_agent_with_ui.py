@@ -4535,11 +4535,44 @@ async def api_discover_network(request):
     try:
         # Start network discovery
         results = await device_discoverer.discover_local_network()
+        
+        # Add enhanced network information
+        import subprocess
+        import socket
+        
+        network_info = {}
+        try:
+            # Get local network information
+            hostname = socket.gethostname()
+            local_ip = socket.gethostbyname(hostname)
+            network_info["local_ip"] = local_ip
+            network_info["hostname"] = hostname
+            
+            # Get network interface info
+            try:
+                netinfo_result = subprocess.run(['ip', 'route'], capture_output=True, text=True, timeout=5)
+                if netinfo_result.returncode == 0:
+                    routes = [line.strip() for line in netinfo_result.stdout.split('\n') if line.strip()]
+                    network_info["network_routes"] = routes[:5]  # First 5 routes
+            except:
+                try:
+                    # Fallback for systems without 'ip' command
+                    netinfo_result = subprocess.run(['netstat', '-rn'], capture_output=True, text=True, timeout=5)
+                    if netinfo_result.returncode == 0:
+                        routes = [line.strip() for line in netinfo_result.stdout.split('\n') if line.strip()]
+                        network_info["network_routes"] = routes[:5]
+                except:
+                    network_info["network_routes"] = ["Network route info unavailable"]
+                    
+        except Exception as e:
+            network_info["error"] = str(e)
+        
         return web.json_response({
             "status": "success",
             "scan_timestamp": time.time(),
             "discovered_devices": results.get("discovered", []),
-            "total_discovered": results.get("total", 0)
+            "total_discovered": results.get("total", 0),
+            "network_info": network_info
         })
     except Exception as e:
         logging.error(f"Network discovery error: {e}")
@@ -5198,6 +5231,20 @@ def main():
             # Start cleanup and optimization tasks
             asyncio.create_task(cleanup_stale_clients())
             asyncio.create_task(memory_optimizer())
+            
+            # Start metrics recording task
+            async def record_metrics():
+                """Periodically record system metrics"""
+                while True:
+                    try:
+                        if persistent_storage:
+                            persistent_storage.track_system_metrics()
+                        await asyncio.sleep(60)  # Record metrics every minute
+                    except Exception as e:
+                        logging.error(f"Metrics recording error: {e}")
+                        await asyncio.sleep(60)
+            
+            asyncio.create_task(record_metrics())
             
             logging.info("Server started successfully with load balancer")
             print("✅ Server is running. Press Ctrl+C to stop.")
