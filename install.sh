@@ -95,13 +95,43 @@ install_system_packages() {
 install_python_deps() {
     print_status "Installing Python dependencies..."
     
-    # Upgrade pip
-    $PIP_CMD install --upgrade pip
+    # Upgrade pip first
+    print_status "Upgrading pip..."
+    $PIP_CMD install --upgrade pip --user 2>/dev/null || $PIP_CMD install --upgrade pip
     
-    # Install required packages
-    $PIP_CMD install websockets aiohttp aiofiles psutil requests
+    # Check if requirements.txt exists
+    if [ -f "requirements.txt" ]; then
+        print_status "Installing from requirements.txt..."
+        $PIP_CMD install -r requirements.txt --user 2>/dev/null || $PIP_CMD install -r requirements.txt
+    else
+        print_warning "requirements.txt not found, installing core packages..."
+        # Install core required packages
+        $PIP_CMD install --user websockets aiohttp aiofiles psutil requests cryptography 2>/dev/null || \
+        $PIP_CMD install websockets aiohttp aiofiles psutil requests cryptography
+    fi
     
-    print_success "Python dependencies installed"
+    # Verify installation
+    print_status "Verifying Python packages..."
+    $PYTHON_CMD -c "import websockets, aiohttp, aiofiles, psutil, requests" 2>/dev/null
+    if [ $? -eq 0 ]; then
+        print_success "Python dependencies installed and verified"
+    else
+        print_error "Some dependencies failed to install"
+        print_warning "Trying alternative installation method..."
+        
+        # Try installing without --user flag
+        $PIP_CMD install websockets aiohttp aiofiles psutil requests cryptography
+        
+        # Check again
+        $PYTHON_CMD -c "import websockets, aiohttp, aiofiles, psutil, requests" 2>/dev/null
+        if [ $? -eq 0 ]; then
+            print_success "Dependencies installed successfully (system-wide)"
+        else
+            print_error "Failed to install dependencies. Please install manually:"
+            print_error "  $PIP_CMD install websockets aiohttp aiofiles psutil requests"
+            exit 1
+        fi
+    fi
 }
 
 # Generate secure authentication token
