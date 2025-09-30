@@ -4370,91 +4370,14 @@ Or manually execute the deployment script.
         window.handleDeviceTerminalKeyPress = handleDeviceTerminalKeyPress;
         window.executeDeviceTerminalCommand = executeDeviceTerminalCommand;
         window.sendDeviceTerminalCommand = sendDeviceTerminalCommand;
-            
-            // Use enhanced terminal API
-            api('/api/terminal/execute', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ target, command, user_context: 'web_terminal' })
-            }).then(result => {
-                if (result.status === 'success') {
-                    const executionResult = result.execution_result;
-                    const deviceCount = executionResult.results?.length || 0;
-                    
-                    appendToTerminal(`✅ Command executed on ${deviceCount} devices`, 'success');
-                    
-                    // Display output from each device
-                    if (executionResult.results) {
-                        executionResult.results.forEach(deviceResult => {
-                            const deviceId = deviceResult.device_id || 'unknown';
-                            
-                            if (deviceResult.success) {
-                                if (deviceResult.output && deviceResult.output.trim()) {
-                                    appendToTerminal(`🖥️ Output from ${deviceId}:`, 'info');
-                                    // Display the actual command output
-                                    const outputLines = deviceResult.output.split('\n');
-                                    outputLines.forEach(line => {
-                                        if (line.trim()) {
-                                            appendToTerminal(`  ${line}`, 'output');
-                                        }
-                                    });
-                                } else {
-                                    appendToTerminal(`📝 ${deviceId}: Command completed (no output)`, 'info');
-                                }
-                                
-                                if (deviceResult.execution_time) {
-                                    appendToTerminal(`⏱️ ${deviceId}: Execution time: ${deviceResult.execution_time.toFixed(2)}s`, 'info');
-                                }
-                            } else {
-                                appendToTerminal(`❌ ${deviceId}: ${deviceResult.error || 'Command failed'}`, 'error');
-                            }
-                        });
-                    }
-                } else {
-                    appendToTerminal(`❌ Terminal execution failed: ${result.error}`, 'error');
-                }
-            }).catch(error => {
-                appendToTerminal(`❌ API Error: ${error.message}`, 'error');
-            });
-            
-            document.getElementById('commandInput').value = '';
-        }
         
-        function getTerminalHistory() {
-            api('/api/terminal/history').then(result => {
-                appendToTerminal(`📜 Command History (${result.total_commands} total commands)`, 'info');
-                result.command_history.slice(-10).forEach(cmd => {
-                    const timestamp = new Date(cmd.timestamp * 1000).toLocaleTimeString();
-                    appendToTerminal(`  [${timestamp}] ${cmd.target} > ${cmd.command}`, 'info');
-                });
-            });
-        }
+        // Add missing switchTab function to global scope
+        window.switchTab = switchTab;
         
-        // Device Discovery Functions
-        function showDeviceDiscovery() {
-            const panel = document.getElementById('deviceDiscoveryPanel');
-            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        // Update sendCommand to use enhanced terminal
+        function sendCommand() {
+            sendTerminalCommand();
         }
-        
-        async function scanLocalNetwork() {
-            appendToTerminal('🔍 Starting network discovery scan...', 'info');
-            
-            try {
-                const result = await api('/api/discover/network', { method: 'POST' });
-                
-                if (result.status === 'success') {
-                    appendToTerminal(`📡 Network scan completed: ${result.total_discovered} devices discovered`, 'success');
-                    displayDiscoveredDevices(result.discovered_devices);
-                } else {
-                    appendToTerminal(`❌ Network scan failed: ${result.error}`, 'error');
-                }
-            } catch (error) {
-                appendToTerminal(`❌ Network scan error: ${error.message}`, 'error');
-            }
-        }
-        
-        function displayDiscoveredDevices(devices) {
-            const container = document.getElementById('discoveredDevices');
             container.innerHTML = '';
             
             if (!devices || devices.length === 0) {
@@ -4731,6 +4654,91 @@ Or manually execute the deployment script.
                 });
             });
         };
+        
+        // Emergency function fixes to ensure UI works
+        if (typeof window.sendTerminalCommand === 'undefined') {
+            window.sendTerminalCommand = function() {
+                const target = document.getElementById('targetSelect').value;
+                const command = document.getElementById('commandInput').value.trim();
+                if (!command) return;
+                
+                fetch('/api/terminal/execute?token=' + encodeURIComponent(AUTH_TOKEN || 'test_token'), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ target, command, user_context: 'web_terminal' })
+                })
+                .then(response => response.json())
+                .then(result => {
+                    const terminal = document.getElementById('terminal');
+                    const timestamp = new Date().toLocaleTimeString();
+                    
+                    if (result.status === 'success' && result.execution_result.results) {
+                        result.execution_result.results.forEach(deviceResult => {
+                            const div = document.createElement('div');
+                            div.className = 'terminal-line';
+                            div.innerHTML = `<span style="color: #00ff9f;">[${timestamp}] ✅ ${deviceResult.device_id}:</span> ${deviceResult.output || 'Command completed'}`;
+                            terminal.appendChild(div);
+                        });
+                    } else {
+                        const div = document.createElement('div');
+                        div.className = 'terminal-line';
+                        div.innerHTML = `<span style="color: #ff0080;">[${timestamp}] ❌ Error:</span> ${result.error || 'Command failed'}`;
+                        terminal.appendChild(div);
+                    }
+                    terminal.scrollTop = terminal.scrollHeight;
+                })
+                .catch(error => {
+                    const terminal = document.getElementById('terminal');
+                    const div = document.createElement('div');
+                    div.className = 'terminal-line';
+                    div.innerHTML = `<span style="color: #ff0080;">[${new Date().toLocaleTimeString()}] ❌ API Error:</span> ${error.message}`;
+                    terminal.appendChild(div);
+                });
+                
+                document.getElementById('commandInput').value = '';
+            };
+        }
+        
+        if (typeof window.switchTab === 'undefined') {
+            window.switchTab = function(tabName) {
+                // Update tab buttons
+                document.querySelectorAll('.tab').forEach(tab => {
+                    tab.classList.remove('active');
+                });
+                event.target.classList.add('active');
+                
+                // Show/hide tab content
+                document.querySelectorAll('.tab-content').forEach(content => {
+                    content.style.display = 'none';
+                });
+                const targetTab = document.getElementById(tabName + 'Tab');
+                if (targetTab) {
+                    targetTab.style.display = 'block';
+                }
+            };
+        }
+        
+        // Add other missing functions
+        if (typeof window.sendQuickCommand === 'undefined') {
+            window.sendQuickCommand = function(cmd) {
+                document.getElementById('commandInput').value = cmd;
+                window.sendTerminalCommand();
+            };
+        }
+        
+        if (typeof window.clearTerminal === 'undefined') {
+            window.clearTerminal = function() {
+                document.getElementById('terminal').innerHTML = '<div class="terminal-line"><span style="color: #00ff9f;">[CLEARED] 🧹 Terminal cleared - Ready for new commands</span></div>';
+            };
+        }
+        
+        if (typeof window.handleCommandKeyPress === 'undefined') {
+            window.handleCommandKeyPress = function(event) {
+                if (event.key === 'Enter') {
+                    window.sendTerminalCommand();
+                }
+            };
+        }
     </script>
     
     <!-- Individual Bot Control Panel -->
