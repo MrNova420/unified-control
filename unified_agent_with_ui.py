@@ -504,14 +504,40 @@ logging.basicConfig(
 )
 
 class Database:
-    """SQLite database handler for device and upload management"""
+    """Enhanced SQLite database handler with caching and performance optimizations"""
     
     def __init__(self, db_path: str):
         self.db_path = db_path
+        self._cache = {}
+        self._cache_timeout = 30  # Cache for 30 seconds
+        self._cache_timestamps = {}
         self.init_db()
     
+    def _get_cached(self, key: str):
+        """Get value from cache if not expired"""
+        if key in self._cache:
+            if time.time() - self._cache_timestamps.get(key, 0) < self._cache_timeout:
+                return self._cache[key]
+        return None
+    
+    def _set_cache(self, key: str, value):
+        """Set cache value with timestamp"""
+        self._cache[key] = value
+        self._cache_timestamps[key] = time.time()
+    
+    def _clear_cache(self, pattern: str = None):
+        """Clear cache entries matching pattern"""
+        if pattern:
+            keys_to_delete = [k for k in self._cache.keys() if pattern in k]
+            for key in keys_to_delete:
+                del self._cache[key]
+                del self._cache_timestamps[key]
+        else:
+            self._cache.clear()
+            self._cache_timestamps.clear()
+    
     def init_db(self):
-        """Initialize database tables"""
+        """Initialize database tables with optimized indexes"""
         conn = sqlite3.connect(self.db_path)
         try:
             conn.execute("""
@@ -525,6 +551,10 @@ class Database:
                 )
             """)
             
+            # Add indexes for performance
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_devices_last_seen ON devices(last_seen DESC)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_devices_tags ON devices(tags)")
+            
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS uploads (
                     id TEXT PRIMARY KEY,
@@ -536,6 +566,8 @@ class Database:
                     sha256 TEXT
                 )
             """)
+            
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_uploads_created ON uploads(created_at DESC)")
             
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS audit_log (
@@ -2178,7 +2210,12 @@ UI_HTML = r"""<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta name="theme-color" content="#0a0a0a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Unified Control">
+    <meta name="description" content="Unified Device Control System - Professional Bot Network Management">
     <title>🚀 Unified Control Center - Advanced Device Management</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -2538,11 +2575,12 @@ UI_HTML = r"""<!DOCTYPE html>
             text-transform: uppercase;
         }
         
-        /* Mobile responsive */
+        /* Enhanced Mobile Responsiveness */
         @media (max-width: 768px) {
             .main-container {
                 grid-template-columns: 1fr;
                 grid-template-rows: auto auto 1fr;
+                padding: 0.5rem;
             }
             
             .header-content {
@@ -2553,6 +2591,78 @@ UI_HTML = r"""<!DOCTYPE html>
             .system-stats {
                 flex-wrap: wrap;
             }
+            
+            /* Mobile-optimized panels */
+            .panel {
+                padding: 0.75rem;
+                margin: 0.5rem 0;
+            }
+            
+            /* Touch-friendly buttons */
+            .btn, .operation-btn, .tab {
+                min-height: 44px; /* iOS recommended minimum */
+                padding: 0.75rem 1rem;
+                font-size: 14px;
+            }
+            
+            /* Larger input fields for mobile */
+            .command-input, input, select, textarea {
+                min-height: 44px;
+                font-size: 16px; /* Prevents iOS zoom */
+                padding: 0.75rem;
+            }
+            
+            /* Mobile-friendly terminal */
+            .terminal {
+                font-size: 12px;
+                max-height: 250px;
+            }
+            
+            /* Responsive device list */
+            .device-item {
+                padding: 0.75rem;
+                margin: 0.5rem 0;
+            }
+            
+            /* Stack metrics vertically on mobile */
+            .metrics-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            /* Mobile-friendly tabs */
+            .command-tabs {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+            
+            /* Hide less critical info on mobile */
+            .device-info {
+                font-size: 11px;
+            }
+        }
+        
+        /* Tablet optimization */
+        @media (min-width: 769px) and (max-width: 1024px) {
+            .main-container {
+                grid-template-columns: 1fr 1fr;
+                padding: 1rem;
+            }
+            
+            .metrics-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        /* Touch-friendly improvements for all devices */
+        * {
+            -webkit-tap-highlight-color: rgba(0, 255, 159, 0.2);
+            touch-action: manipulation; /* Prevents double-tap zoom */
+        }
+        
+        /* Smooth scrolling for all containers */
+        .terminal, .device-list, .service-list, .file-list {
+            -webkit-overflow-scrolling: touch;
+            scroll-behavior: smooth;
         }
         
         .notification {
@@ -3282,9 +3392,34 @@ UI_HTML = r"""<!DOCTYPE html>
     </div>
     
     <script>
+        // Production-ready enhancements
+        'use strict';
+        
+        // Performance monitoring
+        const performanceMetrics = {
+            apiCalls: 0,
+            errors: 0,
+            startTime: Date.now(),
+            lastActivity: Date.now()
+        };
+        
+        // Network status monitoring
+        let isOnline = navigator.onLine;
+        window.addEventListener('online', () => {
+            isOnline = true;
+            showNotification('🌐 Connection restored', 'success');
+            refreshDevices();
+        });
+        window.addEventListener('offline', () => {
+            isOnline = false;
+            showNotification('📡 Connection lost - Working in offline mode', 'warning');
+        });
+        
+        // Token validation
         const token = new URLSearchParams(window.location.search).get('token');
         if (!token) {
             document.body.innerHTML = '<div style="padding:2rem;text-align:center;color:#ff0080;">❌ ACCESS DENIED: Token required in URL</div>';
+            throw new Error('No token provided');
         }
         
         let selectedDevices = new Set(['all']);
@@ -3293,11 +3428,73 @@ UI_HTML = r"""<!DOCTYPE html>
         let commandCount = 0;
         let successfulCommands = 0;
         
-        // API Helper
-        async function api(endpoint, options = {}) {
+        // Enhanced API helper with retry logic and error handling
+        async function api(endpoint, options = {}, retries = 3) {
             const url = `${endpoint}${endpoint.includes('?') ? '&' : '?'}token=${token}`;
-            const response = await fetch(url, options);
-            return await response.json();
+            performanceMetrics.apiCalls++;
+            
+            for (let attempt = 1; attempt <= retries; attempt++) {
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+                    
+                    const response = await fetch(url, {
+                        ...options,
+                        signal: controller.signal
+                    });
+                    
+                    clearTimeout(timeoutId);
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    
+                    const data = await response.json();
+                    performanceMetrics.lastActivity = Date.now();
+                    return data;
+                    
+                } catch (error) {
+                    if (attempt === retries) {
+                        performanceMetrics.errors++;
+                        console.error(`API call failed after ${retries} attempts:`, error);
+                        
+                        // User-friendly error message
+                        if (error.name === 'AbortError') {
+                            throw new Error('Request timeout - server may be slow or unresponsive');
+                        } else if (!isOnline) {
+                            throw new Error('No network connection - check your internet');
+                        } else {
+                            throw error;
+                        }
+                    }
+                    // Wait before retry (exponential backoff)
+                    await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+                }
+            }
+        }
+        
+        // Notification system
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.className = `notification notification-${type}`;
+            notification.textContent = message;
+            notification.style.cssText = `
+                position: fixed;
+                top: 80px;
+                right: 20px;
+                padding: 1rem 1.5rem;
+                background: ${type === 'success' ? '#00ff9f' : type === 'error' ? '#ff0080' : '#00ccff'};
+                color: #0a0a0a;
+                border-radius: 4px;
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+                z-index: 10000;
+                animation: slideIn 0.3s ease;
+                max-width: 300px;
+                font-size: 14px;
+                font-weight: 500;
+            `;
+            document.body.appendChild(notification);
+            setTimeout(() => notification.remove(), 4000);
         }
         
         // Tab switching function
